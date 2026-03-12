@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Assistente virtual de Transparência e Prestação de Contas do TRE-PI">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; img-src 'self' data:;">
+  <title>Transparência Chat — TRE-PI</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+<noscript>
+  <div class="noscript-warning">
+    Esta aplicação requer JavaScript habilitado para funcionar.
+    Por favor, habilite o JavaScript no seu navegador ou acesse diretamente o
+    <a href="https://www.tre-pi.jus.br/transparencia-e-prestacao-de-contas">portal de transparência do TRE-PI</a>.
+  </div>
+</noscript>
+
+<div class="app-wrapper">
+
+  <!-- HEADER -->
+  <header class="app-header">
+    <div class="header-logo" aria-hidden="true">
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 2L3 7v2h18V7L12 2zm0 2.18L18.39 7H5.61L12 4.18zM5 10v8H3v2h18v-2h-2v-8h-2v8h-2v-8h-2v8h-2v-8H9v8H7v-8H5z"/>
+      </svg>
+    </div>
+    <span class="header-title">Tribunal Regional Eleitoral do Piauí</span>
+  </header>
+
+  <!-- TITLE BAR -->
+  <div class="chat-title-bar">
+    <nav class="breadcrumb" aria-label="Localização">
+      <a href="https://www.tre-pi.jus.br">Início</a> /
+      <a href="https://www.tre-pi.jus.br/transparencia-e-prestacao-de-contas">Transparência</a> /
+      Consultar
+    </nav>
+    <div class="chat-title-text">
+      <span class="chat-title-icon" aria-hidden="true">🏛️</span>
+      Transparência Chat
+    </div>
+  </div>
+
+  <!-- MESSAGES AREA -->
+  <main id="messages-area" class="messages-area" role="log" aria-live="polite" aria-label="Mensagens do chat">
+
+    <!-- Welcome message -->
+    <div class="message-row" id="welcome-message">
+      <div class="avatar" aria-hidden="true">⚖️</div>
+      <div class="bot-card">
+        <div class="bot-card-header">
+          <span>📋</span> BEM-VINDO
+        </div>
+        <div class="content-box">
+          <p>Olá! Sou o <strong>Transparência Chat</strong> do TRE-PI.</p>
+          <p>Estou aqui para ajudá-lo a encontrar informações no portal de <strong>Transparência e Prestação de Contas</strong> do Tribunal Regional Eleitoral do Piauí.</p>
+          <p>Pergunte sobre licitações, remuneração, contratos, prestação de contas, LGPD e muito mais!</p>
+        </div>
+        <div class="suggestions" id="welcome-chips">
+          <button class="suggestion-chip">Licitações em andamento</button>
+          <button class="suggestion-chip">Remuneração dos servidores</button>
+          <button class="suggestion-chip">Relatório de gestão</button>
+          <button class="suggestion-chip">LGPD e proteção de dados</button>
+          <button class="suggestion-chip">Contratos de TI</button>
+          <button class="suggestion-chip">Prestação de contas</button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- INPUT AREA -->
+  <div class="input-area">
+    <textarea
+      id="input-field"
+      class="input-field"
+      placeholder="Digite sua pergunta..."
+      rows="1"
+      aria-label="Campo de mensagem"
+      maxlength="2000"
+    ></textarea>
+    <button
+      id="send-button"
+      class="send-button"
+      aria-label="Enviar mensagem"
+      title="Enviar"
+    >
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+      </svg>
+    </button>
+  </div>
+
+</div>
+
+<script src="/static/js/chat.js"></script>
+</body>
+</html>
