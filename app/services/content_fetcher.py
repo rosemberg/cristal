@@ -1,7 +1,6 @@
 import logging
-import time
 from dataclasses import dataclass
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 from urllib.parse import urlparse
 
 import httpx
@@ -9,6 +8,9 @@ from bs4 import BeautifulSoup
 from cachetools import TTLCache
 
 from app.config import CACHE_TTL_SECONDS, MAX_CONTENT_LENGTH
+
+if TYPE_CHECKING:
+    from app.services.knowledge_base import KnowledgeBase
 
 logger = logging.getLogger(__name__)
 
@@ -147,3 +149,28 @@ class ContentFetcher:
         except Exception as exc:
             logger.error("Error fetching %s: %s", url, exc)
             return FetchResult(url=url, content=None, content_type="error", is_media=False)
+
+    async def get_from_db_or_fetch(
+        self, url: str, kb: "KnowledgeBase | None" = None
+    ) -> FetchResult:
+        """
+        Verifica o banco de conhecimento antes de fazer requisição HTTP.
+        Se main_content existir no banco, retorna sem fazer request ao site.
+        Só aciona o scraping HTTP quando o conteúdo não está disponível localmente.
+        """
+        if kb is not None:
+            page = kb.get_page_with_context(url)
+            if page and page.get("main_content"):
+                content = page["main_content"]
+                truncated = len(content) > MAX_CONTENT_LENGTH
+                if truncated:
+                    content = content[:MAX_CONTENT_LENGTH]
+                logger.debug("Conteúdo servido do banco local para %s", url)
+                return FetchResult(
+                    url=url,
+                    content=content,
+                    content_type="html",
+                    is_media=False,
+                    truncated=truncated,
+                )
+        return await self.fetch_page_content(url)

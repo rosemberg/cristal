@@ -32,3 +32,8 @@ class SuggestResponse(BaseModel):
 class HealthResponse(BaseModel):
     status: str
     version: str = "1.0.0"
+    knowledge_stats: dict = {}
+
+
+class CategoriesResponse(BaseModel):
+    categories: list[dict]

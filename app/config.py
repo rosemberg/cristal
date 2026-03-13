@@ -24,3 +24,8 @@ RATE_LIMIT_PER_MINUTE: int = int(os.getenv("RATE_LIMIT_PER_MINUTE", "10"))
 KNOWLEDGE_BASE_PATH: str = os.path.join(
     os.path.dirname(__file__), "data", "knowledge.md"
 )
+
+KNOWLEDGE_DB_PATH: str = os.getenv(
+    "KNOWLEDGE_DB_PATH",
+    os.path.join(os.path.dirname(__file__), "data", "knowledge.db"),
+)
