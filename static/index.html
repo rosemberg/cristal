@@ -1,100 +1,173 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" class="h-full">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="Assistente virtual de Transparência e Prestação de Contas do TRE-PI">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; img-src 'self' data:;">
-  <title>Transparência Chat — TRE-PI</title>
-  <link rel="stylesheet" href="/static/css/style.css">
+  <title>Cristal — TRE-PI</title>
+
+  <!-- Tailwind v3 CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50:  '#e0f2f1',
+              100: '#b2dfdb',
+              200: '#80cbc4',
+              300: '#4db6ac',
+              400: '#26a69a',
+              500: '#00897B',
+              600: '#006B5F',
+              700: '#005A50',
+              800: '#004D44',
+              900: '#003D36',
+            },
+            surface: '#F1F8E9',
+            'surface-border': '#C5E1A5',
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', '-apple-system', 'Segoe UI', 'sans-serif'],
+          },
+        },
+      },
+    };
+  </script>
+
+  <!-- Inter font -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="/static/css/style.css?v=2">
 </head>
-<body>
+<body class="h-full bg-gradient-to-br from-brand-50 via-emerald-50 to-green-50 font-sans antialiased">
 
 <noscript>
-  <div class="noscript-warning">
-    Esta aplicação requer JavaScript habilitado para funcionar.
-    Por favor, habilite o JavaScript no seu navegador ou acesse diretamente o
-    <a href="https://www.tre-pi.jus.br/transparencia-e-prestacao-de-contas">portal de transparência do TRE-PI</a>.
+  <div class="p-6 bg-amber-50 border border-amber-300 text-center text-amber-800 text-sm">
+    Esta aplicação requer JavaScript habilitado. Acesse o
+    <a href="https://www.tre-pi.jus.br/transparencia-e-prestacao-de-contas" class="underline font-semibold">portal de transparência do TRE-PI</a>.
   </div>
 </noscript>
 
-<div class="app-wrapper">
+<!-- ====== APP SHELL ====== -->
+<div class="h-full flex items-center justify-center p-0 md:p-5">
+  <div class="w-full max-w-[880px] h-full md:h-[calc(100vh-2.5rem)] flex flex-col bg-white rounded-none md:rounded-3xl shadow-none md:shadow-2xl overflow-hidden md:border md:border-gray-200/70">
 
-  <!-- HEADER -->
-  <header class="app-header">
-    <div class="header-logo" aria-hidden="true">
-      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-        <path d="M12 2L3 7v2h18V7L12 2zm0 2.18L18.39 7H5.61L12 4.18zM5 10v8H3v2h18v-2h-2v-8h-2v8h-2v-8h-2v8h-2v-8H9v8H7v-8H5z"/>
-      </svg>
-    </div>
-    <span class="header-title">Tribunal Regional Eleitoral do Piauí</span>
-  </header>
+    <!-- ====== HEADER ====== -->
+    <header class="flex-shrink-0 relative bg-gradient-to-r from-brand-700 via-brand-600 to-brand-500 px-6 py-4">
+      <!-- Decorative -->
+      <div class="absolute top-0 right-0 w-40 h-40 rounded-full bg-white/5 -translate-y-1/2 translate-x-1/4"></div>
+      <div class="absolute bottom-0 left-0 w-24 h-24 rounded-full bg-white/5 translate-y-1/2 -translate-x-1/4"></div>
 
-  <!-- TITLE BAR -->
-  <div class="chat-title-bar">
-    <nav class="breadcrumb" aria-label="Localização">
-      <a href="https://www.tre-pi.jus.br">Início</a> /
-      <a href="https://www.tre-pi.jus.br/transparencia-e-prestacao-de-contas">Transparência</a> /
-      Consultar
-    </nav>
-    <div class="chat-title-text">
-      <span class="chat-title-icon" aria-hidden="true">🏛️</span>
-      Transparência Chat
-    </div>
-  </div>
-
-  <!-- MESSAGES AREA -->
-  <main id="messages-area" class="messages-area" role="log" aria-live="polite" aria-label="Mensagens do chat">
-
-    <!-- Welcome message -->
-    <div class="message-row" id="welcome-message">
-      <div class="avatar" aria-hidden="true">⚖️</div>
-      <div class="bot-card">
-        <div class="bot-card-header">
-          <span>📋</span> BEM-VINDO
+      <div class="relative z-10 flex items-center gap-4">
+        <!-- Logo icon -->
+        <div class="w-11 h-11 rounded-2xl bg-white/15 backdrop-blur-sm border border-white/20 flex items-center justify-center flex-shrink-0">
+          <svg class="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 2L2 9l10 13 10-13L12 2z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" d="M2 9h20M7.5 9l4.5 13 4.5-13"/>
+          </svg>
         </div>
-        <div class="content-box">
-          <p>Olá! Sou o <strong>Transparência Chat</strong> do TRE-PI.</p>
-          <p>Estou aqui para ajudá-lo a encontrar informações no portal de <strong>Transparência e Prestação de Contas</strong> do Tribunal Regional Eleitoral do Piauí.</p>
-          <p>Pergunte sobre licitações, remuneração, contratos, prestação de contas, LGPD e muito mais!</p>
+
+        <!-- Title -->
+        <div class="flex-1 min-w-0">
+          <h1 class="text-white font-bold text-lg tracking-wide leading-tight">Cristal</h1>
+          <p class="text-white/60 text-xs mt-0.5">Transparência &middot; TRE-PI</p>
         </div>
-        <div class="suggestions" id="welcome-chips">
-          <button class="suggestion-chip">Licitações em andamento</button>
-          <button class="suggestion-chip">Remuneração dos servidores</button>
-          <button class="suggestion-chip">Relatório de gestão</button>
-          <button class="suggestion-chip">LGPD e proteção de dados</button>
-          <button class="suggestion-chip">Contratos de TI</button>
-          <button class="suggestion-chip">Prestação de contas</button>
+
+        <!-- Online badge -->
+        <div class="flex items-center gap-2 bg-white/10 border border-white/15 rounded-full px-3 py-1.5">
+          <span class="relative flex h-2 w-2">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-300 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-300"></span>
+          </span>
+          <span class="text-[11px] font-medium text-white/80">Online</span>
         </div>
       </div>
+    </header>
+
+    <!-- ====== BREADCRUMB ====== -->
+    <nav class="flex-shrink-0 flex items-center gap-1.5 px-6 py-2.5 bg-gray-50 border-b border-gray-200 text-xs text-gray-400" aria-label="Localização">
+      <!-- home icon -->
+      <svg class="w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-4 0a1 1 0 01-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 01-1 1h-2z"/></svg>
+      <a href="https://www.tre-pi.jus.br" class="text-brand-500 hover:underline">Início</a>
+      <svg class="w-3 h-3 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+      <a href="https://www.tre-pi.jus.br/transparencia-e-prestacao-de-contas" class="text-brand-500 hover:underline">Transparência</a>
+      <svg class="w-3 h-3 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+      <span class="text-gray-500 font-medium">Consultar</span>
+    </nav>
+
+    <!-- ====== MESSAGES AREA ====== -->
+    <main id="messages-area" class="flex-1 overflow-y-auto px-5 sm:px-8 py-6 space-y-5 bg-gray-50/40 messages-scrollbar" role="log" aria-live="polite" aria-label="Mensagens do chat">
+
+      <!-- Welcome message -->
+      <div class="flex gap-3.5 items-start message-enter" id="welcome-message">
+        <!-- Avatar -->
+        <div class="w-10 h-10 rounded-full bg-gradient-to-br from-brand-600 to-brand-400 flex items-center justify-center flex-shrink-0 shadow-lg shadow-brand-600/20 ring-2 ring-white">
+          <svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3"/></svg>
+        </div>
+        <!-- Card -->
+        <div class="flex-1 min-w-0 bg-white rounded-2xl rounded-tl-none shadow-md shadow-gray-200/60 border border-gray-200 overflow-hidden">
+          <!-- Card header -->
+          <div class="px-5 pt-4 pb-2">
+            <span class="inline-flex items-center gap-2 text-[11px] font-bold tracking-widest text-brand-600 uppercase">
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"/></svg>
+              Boas-vindas
+            </span>
+          </div>
+          <!-- Card body -->
+          <div class="px-5 pb-4">
+            <div class="bg-surface border border-surface-border/60 rounded-xl p-4 text-sm leading-relaxed text-gray-700 space-y-2">
+              <p>Olá! Sou a <strong class="text-brand-600 font-semibold">Cristal</strong>.</p>
+              <p>Estou aqui para ajudá-lo a encontrar informações no portal de <strong class="text-brand-600 font-semibold">Transparência e Prestação de Contas</strong> do Tribunal Regional Eleitoral do Piauí.</p>
+              <p>Pergunte sobre licitações, remuneração, contratos, prestação de contas, LGPD e muito mais!</p>
+            </div>
+          </div>
+          <!-- Suggestion chips -->
+          <div class="px-5 pb-5 flex flex-wrap gap-2" id="welcome-chips">
+            <button class="suggestion-chip">Licitações em andamento</button>
+            <button class="suggestion-chip">Remuneração dos servidores</button>
+            <button class="suggestion-chip">Relatório de gestão</button>
+            <button class="suggestion-chip">LGPD e proteção de dados</button>
+            <button class="suggestion-chip">Contratos de TI</button>
+            <button class="suggestion-chip">Prestação de contas</button>
+          </div>
+        </div>
+      </div>
+
+    </main>
+
+    <!-- ====== INPUT AREA ====== -->
+    <div class="flex-shrink-0 bg-white border-t border-gray-200 px-5 sm:px-8 py-4">
+      <div class="input-wrapper flex items-end gap-3 bg-gray-50 border-2 border-gray-200 rounded-2xl px-4 py-2 transition-all duration-200 focus-within:border-brand-500 focus-within:ring-4 focus-within:ring-brand-500/10 focus-within:bg-white">
+        <textarea
+          id="input-field"
+          class="flex-1 bg-transparent text-sm text-gray-800 placeholder-gray-400 outline-none resize-none max-h-[150px] leading-relaxed py-2"
+          placeholder="Digite sua pergunta sobre transparência..."
+          rows="2"
+          aria-label="Campo de mensagem"
+          maxlength="2000"
+        ></textarea>
+        <button
+          id="send-button"
+          class="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-600 to-brand-500 text-white flex items-center justify-center flex-shrink-0 mb-0.5 transition-all duration-200 hover:shadow-lg hover:shadow-brand-600/30 hover:scale-105 active:scale-95 disabled:opacity-40 disabled:shadow-none disabled:hover:scale-100 disabled:cursor-not-allowed cursor-pointer"
+          aria-label="Enviar mensagem"
+          title="Enviar"
+        >
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"/></svg>
+        </button>
+      </div>
+      <p class="text-[10px] text-gray-400 text-center mt-2.5 select-none">
+        Cristal pode apresentar informações imprecisas. Verifique dados importantes no
+        <a href="https://www.tre-pi.jus.br/transparencia-e-prestacao-de-contas" class="text-brand-500 hover:underline" target="_blank" rel="noopener">portal oficial</a>.
+      </p>
     </div>
 
-  </main>
-
-  <!-- INPUT AREA -->
-  <div class="input-area">
-    <textarea
-      id="input-field"
-      class="input-field"
-      placeholder="Digite sua pergunta..."
-      rows="1"
-      aria-label="Campo de mensagem"
-      maxlength="2000"
-    ></textarea>
-    <button
-      id="send-button"
-      class="send-button"
-      aria-label="Enviar mensagem"
-      title="Enviar"
-    >
-      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-        <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-      </svg>
-    </button>
   </div>
-
 </div>
 
-<script src="/static/js/chat.js"></script>
+<script src="/static/js/chat.js?v=2"></script>
 </body>
 </html>
