@@ -132,12 +132,16 @@ async def _default_lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
         app.state.embedding_gateway = None
         logger.warning("EmbeddingGateway não disponível: %s. Busca semântica desabilitada.", exc)
 
+    from app.adapters.outbound.postgres.embedding_repo import PostgresEmbeddingRepository
+    embedding_repo = PostgresEmbeddingRepository(pool)
+
     app.state.ingestion_service = DocumentIngestionService(
         doc_repo=doc_ingestion_repo,
         downloader=download_gw,
         processor=process_gw,
         inconsistency_repo=inconsistency_repo,
         embedding_gateway=embedding_gateway,
+        embedding_repo=embedding_repo,
     )
     app.state.health_check_service = DataHealthCheckService(
         downloader=download_gw,

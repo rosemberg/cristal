@@ -1,15 +1,19 @@
 """Domain service: DocumentIngestionService.
 
 Orquestra o pipeline de ingestão de documentos:
-  download → processamento → persistência atômica
+  download → processamento → persistência atômica → embeddings
 
 V2: usa DocumentProcessGateway (port) e registra inconsistências
     na tabela data_inconsistencies via InconsistencyRepository.
+V2 RAG: após save_content_atomic, gera embeddings dos chunks e tabelas
+    via EmbeddingGateway e persiste na tabela embeddings.
+    SHA-256 do texto evita re-gerar embeddings não modificados.
 """
 
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import time
 from datetime import datetime, timezone
@@ -30,7 +34,8 @@ from app.domain.ports.outbound.document_process_gateway import (
     DocumentProcessingError,
 )
 from app.domain.ports.outbound.document_repository import DocumentRepository
-from app.domain.ports.outbound.embedding_gateway import EmbeddingGateway
+from app.domain.ports.outbound.embedding_gateway import EmbeddingGateway, EmbeddingUnavailableError
+from app.domain.ports.outbound.embedding_repository import EmbeddingRecord, EmbeddingRepository
 from app.domain.ports.outbound.inconsistency_repository import InconsistencyRepository
 from app.domain.value_objects.data_inconsistency import DataInconsistency
 from app.domain.value_objects.ingestion import IngestionStats, IngestionStatus
@@ -88,6 +93,7 @@ class DocumentIngestionService(DocumentIngestionUseCase):
         inconsistency_repo: InconsistencyRepository,
         concurrency: int = 3,
         embedding_gateway: EmbeddingGateway | None = None,
+        embedding_repo: EmbeddingRepository | None = None,
     ) -> None:
         self._doc_repo = doc_repo
         self._downloader = downloader
@@ -95,6 +101,7 @@ class DocumentIngestionService(DocumentIngestionUseCase):
         self._inconsistency_repo = inconsistency_repo
         self._default_concurrency = concurrency
         self._embedding_gateway = embedding_gateway
+        self._embedding_repo = embedding_repo
 
     # ── Orquestração principal ────────────────────────────────────────────────
 
@@ -267,7 +274,144 @@ class DocumentIngestionService(DocumentIngestionUseCase):
             len(processed.chunks),
             len(processed.tables),
         )
+
+        # ── Geração de embeddings (opcional) ──────────────────────────────────
+        if self._embedding_gateway is not None and self._embedding_repo is not None:
+            await self._generate_embeddings(doc, processed)
+
         return True, 0
+
+    # ── Geração de embeddings ─────────────────────────────────────────────────
+
+    @staticmethod
+    def _sha256(text: str) -> str:
+        return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+    async def _generate_embeddings(
+        self, doc: Document, processed: "ProcessedDocument"  # noqa: F821
+    ) -> None:
+        """Gera embeddings de chunks e tabelas e persiste na tabela embeddings.
+
+        - Pula chunks/tabelas cujo SHA-256 não mudou (re-ingestão sem modificação).
+        - Em caso de falha do EmbeddingGateway, registra 'embedding_failed' e continua.
+        """
+        from app.domain.ports.outbound.document_repository import ProcessedDocument  # noqa: PLC0415
+
+        url = doc.document_url
+
+        # Busca os chunks salvos com IDs do banco (save_content_atomic não retorna IDs)
+        saved_chunks = await self._doc_repo.get_chunks(url)
+        saved_tables = await self._doc_repo.get_tables(url)
+
+        # Hashes existentes para skip rápido em re-ingestão
+        existing_chunk_hashes = await self._embedding_repo.get_existing_hashes("chunk")
+        existing_table_hashes = await self._embedding_repo.get_existing_hashes("table")
+
+        # ── Chunks ────────────────────────────────────────────────────────────
+        chunks_to_embed: list[tuple[int, str]] = []  # (id, text)
+        for chunk in saved_chunks:
+            text = chunk.text or ""
+            if not text.strip():
+                continue
+            h = self._sha256(text)
+            if existing_chunk_hashes.get(chunk.id) == h:
+                continue  # não mudou — pular
+            chunks_to_embed.append((chunk.id, text))
+
+        if chunks_to_embed:
+            texts = [t for _, t in chunks_to_embed]
+            try:
+                embeddings = await self._embedding_gateway.embed_batch(
+                    texts, task_type="RETRIEVAL_DOCUMENT"
+                )
+                records = [
+                    EmbeddingRecord(
+                        source_type="chunk",
+                        source_id=cid,
+                        embedding=emb,
+                        source_text_hash=self._sha256(text),
+                    )
+                    for (cid, text), emb in zip(chunks_to_embed, embeddings)
+                ]
+                await self._embedding_repo.save_batch(records)
+                logger.info("Embeddings gerados: %d chunks (%s)", len(records), url)
+            except EmbeddingUnavailableError as exc:
+                logger.warning("EmbeddingGateway indisponível para %s: %s", url, exc)
+                await self._register_embedding_failure(doc, str(exc))
+            except Exception as exc:  # noqa: BLE001
+                logger.error("Falha ao gerar embeddings de chunks para %s: %s", url, exc)
+                await self._register_embedding_failure(doc, str(exc))
+
+        # ── Tabelas ───────────────────────────────────────────────────────────
+        tables_to_embed: list[tuple[int, str]] = []
+        for table in saved_tables:
+            # Texto representativo: caption + headers concatenados
+            parts = [table.caption or ""]
+            if table.headers:
+                parts.append(" | ".join(str(h) for h in table.headers))
+            if table.rows:
+                # Inclui até 5 linhas para contexto semântico
+                for row in table.rows[:5]:
+                    parts.append(" | ".join(str(c) for c in row))
+            text = " ".join(p for p in parts if p).strip()
+            if not text:
+                continue
+            h = self._sha256(text)
+            if existing_table_hashes.get(table.id) == h:
+                continue
+            tables_to_embed.append((table.id, text))
+
+        if tables_to_embed:
+            texts = [t for _, t in tables_to_embed]
+            try:
+                embeddings = await self._embedding_gateway.embed_batch(
+                    texts, task_type="RETRIEVAL_DOCUMENT"
+                )
+                records = [
+                    EmbeddingRecord(
+                        source_type="table",
+                        source_id=tid,
+                        embedding=emb,
+                        source_text_hash=self._sha256(text),
+                    )
+                    for (tid, text), emb in zip(tables_to_embed, embeddings)
+                ]
+                await self._embedding_repo.save_batch(records)
+                logger.info("Embeddings gerados: %d tabelas (%s)", len(records), url)
+            except EmbeddingUnavailableError as exc:
+                logger.warning("EmbeddingGateway indisponível para tabelas %s: %s", url, exc)
+            except Exception as exc:  # noqa: BLE001
+                logger.error("Falha ao gerar embeddings de tabelas para %s: %s", url, exc)
+
+    async def _register_embedding_failure(self, doc: Document, detail: str) -> None:
+        """Registra inconsistência do tipo 'embedding_failed' — não bloqueia ingestão."""
+        now = datetime.now(timezone.utc)
+        inconsistency = DataInconsistency(
+            id=None,
+            resource_type="document",
+            severity="warning",
+            inconsistency_type="embedding_failed",
+            resource_url=doc.document_url,
+            resource_title=doc.title,
+            parent_page_url=doc.page_url,
+            detail=detail,
+            http_status=None,
+            error_message=detail,
+            detected_at=now,
+            detected_by="embedding_pipeline",
+            status="open",
+            resolved_at=None,
+            resolved_by=None,
+            resolution_note=None,
+            retry_count=0,
+            last_checked_at=now,
+        )
+        try:
+            await self._inconsistency_repo.upsert(
+                doc.document_url, "embedding_failed", inconsistency
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.error("Falha ao registrar embedding_failed: %s", exc)
 
     # ── Helpers ────────────────────────────────────────────────────────────────
 

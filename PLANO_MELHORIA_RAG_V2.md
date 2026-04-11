@@ -58,7 +58,7 @@ O stemmer português do PostgreSQL trata "diárias" (com acento) e "DIARIAS" (se
 1. Salvar os registros
 2. Fazer commit e push no GitHub
 
-### 2c. Integração na Ingestão
+### ~~2c. Integração na Ingestão~~ ✅ CONCLUÍDA
 
 - `app/domain/services/document_ingestion_service.py` — após salvar chunks, gerar embeddings e persistir na tabela `embeddings`:
   - **Chunks**: embedding do `chunk_text` (fonte principal de busca semântica)
@@ -199,7 +199,8 @@ Implementado como **decorator/wrapper** do `SearchRepository` (mantém mesma int
 | 2 | 4 | Apresentação rica no frontend | ✅ Concluída |
 | 3 | 2a | Docker pgvector + migration tabela embeddings | ✅ Concluída |
 | 4 | 2b | EmbeddingGateway port + adapter + cache/circuit breaker | ✅ Concluída |
-| 5 | 2c-2d | Integração na ingestão + busca semântica | Pendente |
+| 5a | 2c | Integração na ingestão + EmbeddingRepository | ✅ Concluída |
+| 5b | 2d | Busca semântica no SearchRepository | Pendente |
 | 6 | 2e | Backfill embeddings existentes | Pendente |
 | 7 | 3 | HybridSearch + RRF (sem query expansion LLM) | Pendente |
 
