@@ -82,39 +82,7 @@ async def _default_lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     app.state.search_repo = search_repo
     app.state.analytics_repo = analytics_repo
 
-    app.state.chat_service = ChatService(
-        search_repo=search_repo,
-        session_repo=session_repo,
-        analytics_repo=analytics_repo,
-        llm=llm,
-    )
-    app.state.document_service = DocumentService(document_repo=document_repo)
-    app.state.session_service = SessionService(session_repo=session_repo)
-
-    # Serviços de ingestão e health check [V2]
-    from app.adapters.outbound.postgres.document_repo import (
-        PostgresDocumentRepository,
-    )
-    from app.adapters.outbound.postgres.inconsistency_repo import PostgresInconsistencyRepository
-    from app.adapters.outbound.postgres.page_repo import PostgresPageRepository
-    from app.domain.services.data_health_check_service import DataHealthCheckService
-    from app.domain.services.document_ingestion_service import DocumentIngestionService
-
-    doc_ingestion_repo = PostgresDocumentRepository(pool)
-    inconsistency_repo = PostgresInconsistencyRepository(pool)
-
-    from app.adapters.outbound.http.document_downloader import HttpDocumentDownloader
-    from app.adapters.outbound.document_processor.document_process_adapter import (
-        DocumentProcessAdapter,
-    )
-    from app.adapters.outbound.document_processor.document_processor import DocumentProcessor
-
-    download_gw = HttpDocumentDownloader()
-    process_gw = DocumentProcessAdapter(DocumentProcessor())
-
-    page_repo = PostgresPageRepository(pool)
-
-    # EmbeddingGateway (opcional — usado para busca semântica RAG V2)
+    # ── EmbeddingGateway (opcional — RAG V2) ──────────────────────────────────
     try:
         from app.adapters.outbound.vertex_ai.embedding_gateway import VertexEmbeddingGateway
         embedding_gateway = VertexEmbeddingGateway(
@@ -132,8 +100,47 @@ async def _default_lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
         app.state.embedding_gateway = None
         logger.warning("EmbeddingGateway não disponível: %s. Busca semântica desabilitada.", exc)
 
+    # ── HybridSearchService (FTS + semântica + RRF) ───────────────────────────
+    from app.domain.services.hybrid_search_service import HybridSearchService
+    hybrid_search = HybridSearchService(
+        search_repo=search_repo,
+        embedding_gateway=embedding_gateway,
+    )
+    app.state.hybrid_search = hybrid_search
+
+    app.state.chat_service = ChatService(
+        search_repo=hybrid_search,
+        session_repo=session_repo,
+        analytics_repo=analytics_repo,
+        llm=llm,
+    )
+    app.state.document_service = DocumentService(document_repo=document_repo)
+    app.state.session_service = SessionService(session_repo=session_repo)
+
+    # Serviços de ingestão e health check [V2]
+    from app.adapters.outbound.postgres.document_repo import (
+        PostgresDocumentRepository,
+    )
+    from app.adapters.outbound.postgres.inconsistency_repo import PostgresInconsistencyRepository
+    from app.adapters.outbound.postgres.page_repo import PostgresPageRepository
+    from app.domain.services.data_health_check_service import DataHealthCheckService
+    from app.domain.services.document_ingestion_service import DocumentIngestionService
     from app.adapters.outbound.postgres.embedding_repo import PostgresEmbeddingRepository
+
+    doc_ingestion_repo = PostgresDocumentRepository(pool)
+    inconsistency_repo = PostgresInconsistencyRepository(pool)
     embedding_repo = PostgresEmbeddingRepository(pool)
+
+    from app.adapters.outbound.http.document_downloader import HttpDocumentDownloader
+    from app.adapters.outbound.document_processor.document_process_adapter import (
+        DocumentProcessAdapter,
+    )
+    from app.adapters.outbound.document_processor.document_processor import DocumentProcessor
+
+    download_gw = HttpDocumentDownloader()
+    process_gw = DocumentProcessAdapter(DocumentProcessor())
+
+    page_repo = PostgresPageRepository(pool)
 
     app.state.ingestion_service = DocumentIngestionService(
         doc_repo=doc_ingestion_repo,

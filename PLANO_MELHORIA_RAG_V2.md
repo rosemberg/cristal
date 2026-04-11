@@ -123,7 +123,7 @@ LIMIT $4
 
 ---
 
-## Fase 3: Busca Híbrida com Orquestração Inteligente
+## ~~Fase 3: Busca Híbrida com Orquestração Inteligente~~ ✅ CONCLUÍDA
 
 ### 3a. HybridSearchService (NOVO)
 
@@ -202,7 +202,7 @@ Implementado como **decorator/wrapper** do `SearchRepository` (mantém mesma int
 | 5a | 2c | Integração na ingestão + EmbeddingRepository | ✅ Concluída |
 | 5b | 2d | Busca semântica no SearchRepository | ✅ Concluída |
 | 6 | 2e | Backfill embeddings existentes | ✅ Concluída |
-| 7 | 3 | HybridSearch + RRF (sem query expansion LLM) | Pendente |
+| 7 | 3 | HybridSearch + RRF (sem query expansion LLM) | ✅ Concluída |
 
 ## Arquivos Críticos
 
