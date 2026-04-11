@@ -15,7 +15,12 @@ import time
 from datetime import datetime, timezone
 
 from app.domain.entities.document import Document
-from app.domain.ports.inbound.document_ingestion_use_case import DocumentIngestionUseCase
+from app.domain.ports.inbound.document_ingestion_use_case import (
+    DocumentIngestionUseCase,
+    ProgressCallback,
+)
+
+_DEFAULT_BATCH_SIZE = 50
 from app.domain.ports.outbound.document_download_gateway import (
     DocumentDownloadGateway,
     DownloadError,
@@ -25,6 +30,7 @@ from app.domain.ports.outbound.document_process_gateway import (
     DocumentProcessingError,
 )
 from app.domain.ports.outbound.document_repository import DocumentRepository
+from app.domain.ports.outbound.embedding_gateway import EmbeddingGateway
 from app.domain.ports.outbound.inconsistency_repository import InconsistencyRepository
 from app.domain.value_objects.data_inconsistency import DataInconsistency
 from app.domain.value_objects.ingestion import IngestionStats, IngestionStatus
@@ -81,27 +87,35 @@ class DocumentIngestionService(DocumentIngestionUseCase):
         processor: DocumentProcessGateway,
         inconsistency_repo: InconsistencyRepository,
         concurrency: int = 3,
+        embedding_gateway: EmbeddingGateway | None = None,
     ) -> None:
         self._doc_repo = doc_repo
         self._downloader = downloader
         self._processor = processor
         self._inconsistency_repo = inconsistency_repo
         self._default_concurrency = concurrency
+        self._embedding_gateway = embedding_gateway
 
     # ── Orquestração principal ────────────────────────────────────────────────
 
-    async def ingest_pending(self, concurrency: int = 3) -> IngestionStats:
-        """Processa todos os documentos com status 'pending'."""
+    async def ingest_pending(
+        self,
+        concurrency: int = 3,
+        on_progress: ProgressCallback = None,
+        batch_size: int = _DEFAULT_BATCH_SIZE,
+    ) -> IngestionStats:
+        """Processa todos os documentos com status 'pending' em lotes."""
         start = time.monotonic()
-        documents = await self._doc_repo.list_pending()
-
-        processed = 0
-        errors = 0
-        inconsistencies = 0
+        processed = errors = inconsistencies = counter = 0
         semaphore = asyncio.Semaphore(concurrency)
 
-        async def process_with_semaphore(doc: Document) -> None:
-            nonlocal processed, errors, inconsistencies
+        # total é obtido no início para informar o callback; pode crescer se
+        # reset_stuck_processing adicionar mais pendentes entre lotes.
+        counts = await self._doc_repo.count_by_status()
+        total = counts.get("pending", 0)
+
+        async def process_one(doc: Document) -> None:
+            nonlocal processed, errors, inconsistencies, counter
             async with semaphore:
                 success, inc_found = await self._process_document(doc)
                 if success:
@@ -109,11 +123,17 @@ class DocumentIngestionService(DocumentIngestionUseCase):
                 else:
                     errors += 1
                     inconsistencies += inc_found
+                counter += 1
+                if on_progress is not None:
+                    on_progress(counter, total, doc.document_url, not success)
 
-        await asyncio.gather(*(process_with_semaphore(doc) for doc in documents))
+        batch = await self._doc_repo.list_pending(limit=batch_size)
+        while batch:
+            await asyncio.gather(*(process_one(doc) for doc in batch))
+            batch = await self._doc_repo.list_pending(limit=batch_size)
 
         return IngestionStats(
-            total=len(documents),
+            total=counter,
             processed=processed,
             errors=errors,
             skipped=0,
@@ -130,12 +150,26 @@ class DocumentIngestionService(DocumentIngestionUseCase):
         success, _ = await self._process_document(doc)
         return success
 
-    async def reprocess_errors(self) -> IngestionStats:
+    async def reprocess_errors(self, on_progress: ProgressCallback = None) -> IngestionStats:
         """Reprocessa documentos que estão com status 'error'."""
         error_docs = await self._doc_repo.list_errors()
         for doc in error_docs:
             await self._doc_repo.update_status(doc.document_url, "pending")
-        return await self.ingest_pending(self._default_concurrency)
+        return await self.ingest_pending(self._default_concurrency, on_progress=on_progress)
+
+    async def resume(
+        self,
+        concurrency: int = 3,
+        on_progress: ProgressCallback = None,
+    ) -> IngestionStats:
+        """Retoma pipeline após crash: reseta docs stuck e processa pendentes."""
+        reset_count = await self._doc_repo.reset_stuck_processing(stuck_minutes=0)
+        if reset_count > 0:
+            logger.info(
+                "resume: %d documento(s) resetados de 'processing' → 'pending'",
+                reset_count,
+            )
+        return await self.ingest_pending(concurrency=concurrency, on_progress=on_progress)
 
     async def get_status(self) -> IngestionStatus:
         """Retorna snapshot dos contadores de status do pipeline."""

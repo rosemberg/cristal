@@ -92,47 +92,58 @@ async def _default_lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     app.state.session_service = SessionService(session_repo=session_repo)
 
     # Serviços de ingestão e health check [V2]
-    from app.adapters.outbound.postgres.document_ingestion_repo import (
-        PostgresDocumentIngestionRepository,
+    from app.adapters.outbound.postgres.document_repo import (
+        PostgresDocumentRepository,
     )
     from app.adapters.outbound.postgres.inconsistency_repo import PostgresInconsistencyRepository
+    from app.adapters.outbound.postgres.page_repo import PostgresPageRepository
     from app.domain.services.data_health_check_service import DataHealthCheckService
     from app.domain.services.document_ingestion_service import DocumentIngestionService
 
-    doc_ingestion_repo = PostgresDocumentIngestionRepository(pool)
+    doc_ingestion_repo = PostgresDocumentRepository(pool)
     inconsistency_repo = PostgresInconsistencyRepository(pool)
 
-    try:
-        from app.adapters.outbound.http.document_download_gateway import (
-            HttpDocumentDownloadGateway,
-        )
-        download_gw = HttpDocumentDownloadGateway()
-    except ImportError:
-        from app.adapters.outbound.http.document_downloader import HttpDocumentDownloader
-        download_gw = HttpDocumentDownloader()  # type: ignore[assignment]
+    from app.adapters.outbound.http.document_downloader import HttpDocumentDownloader
+    from app.adapters.outbound.document_processor.document_process_adapter import (
+        DocumentProcessAdapter,
+    )
+    from app.adapters.outbound.document_processor.document_processor import DocumentProcessor
 
+    download_gw = HttpDocumentDownloader()
+    process_gw = DocumentProcessAdapter(DocumentProcessor())
+
+    page_repo = PostgresPageRepository(pool)
+
+    # EmbeddingGateway (opcional — usado para busca semântica RAG V2)
     try:
-        from app.adapters.outbound.process.document_process_gateway import (
-            DefaultDocumentProcessGateway,
+        from app.adapters.outbound.vertex_ai.embedding_gateway import VertexEmbeddingGateway
+        embedding_gateway = VertexEmbeddingGateway(
+            project_id=settings.vertex_project_id,
+            location=settings.vertex_location,
+            model_name=settings.vertex_embedding_model,
+            cache_max_size=settings.embedding_cache_max_size,
+            circuit_breaker_threshold=settings.embedding_circuit_breaker_threshold,
+            circuit_breaker_timeout=settings.embedding_circuit_breaker_timeout,
         )
-        process_gw = DefaultDocumentProcessGateway()
-    except ImportError:
-        from app.adapters.outbound.process.document_process_adapter import (
-            DocumentProcessAdapter,
-        )
-        process_gw = DocumentProcessAdapter()  # type: ignore[assignment]
+        app.state.embedding_gateway = embedding_gateway
+        logger.info("EmbeddingGateway inicializado: %s", settings.vertex_embedding_model)
+    except Exception as exc:  # noqa: BLE001
+        embedding_gateway = None
+        app.state.embedding_gateway = None
+        logger.warning("EmbeddingGateway não disponível: %s. Busca semântica desabilitada.", exc)
 
     app.state.ingestion_service = DocumentIngestionService(
-        document_repository=doc_ingestion_repo,
-        download_gateway=download_gw,
-        process_gateway=process_gw,
-        inconsistency_repository=inconsistency_repo,
+        doc_repo=doc_ingestion_repo,
+        downloader=download_gw,
+        processor=process_gw,
+        inconsistency_repo=inconsistency_repo,
+        embedding_gateway=embedding_gateway,
     )
     app.state.health_check_service = DataHealthCheckService(
-        page_repository=PostgresPageRepository(pool),
-        document_repository=doc_ingestion_repo,
-        download_gateway=download_gw,
-        inconsistency_repository=inconsistency_repo,
+        downloader=download_gw,
+        page_repo=page_repo,
+        doc_repo=doc_ingestion_repo,
+        inconsistency_repo=inconsistency_repo,
     )
 
     logger.info("Aplicação pronta")
