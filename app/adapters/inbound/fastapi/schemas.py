@@ -157,6 +157,69 @@ class AnalyticsResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Ingestion (Admin — Etapa 7)
+# ---------------------------------------------------------------------------
+
+
+class IngestionStatsOut(BaseModel):
+    total: int
+    processed: int
+    errors: int
+    skipped: int
+    duration_seconds: float
+    inconsistencies_found: int
+
+
+class IngestionStatusOut(BaseModel):
+    pending: int
+    processing: int
+    done: int
+    error: int
+    total_chunks: int
+    total_tables: int
+    open_inconsistencies: int
+
+
+class HealthCheckReportOut(BaseModel):
+    total_checked: int
+    healthy: int
+    issues_found: int
+    new_inconsistencies: int
+    updated_inconsistencies: int
+    auto_resolved: int
+    duration_seconds: float
+    by_type: dict[str, int]
+
+
+class DataInconsistencyOut(BaseModel):
+    id: int | None
+    resource_type: str
+    severity: str
+    inconsistency_type: str
+    resource_url: str
+    resource_title: str | None
+    parent_page_url: str | None
+    detail: str
+    http_status: int | None
+    error_message: str | None
+    detected_at: datetime
+    detected_by: str
+    status: str
+    resolved_at: datetime | None
+    resolved_by: str | None
+    resolution_note: str | None
+    retry_count: int
+    last_checked_at: datetime
+
+
+class InconsistencySummaryOut(BaseModel):
+    total: int
+    by_severity: dict[str, int]
+    by_type: dict[str, int]
+    by_resource_type: dict[str, int]
+
+
+# ---------------------------------------------------------------------------
 # Health
 # ---------------------------------------------------------------------------
 

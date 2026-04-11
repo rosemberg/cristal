@@ -10,6 +10,8 @@ from __future__ import annotations
 from fastapi import Request
 
 from app.domain.ports.inbound.chat_use_case import ChatUseCase
+from app.domain.ports.inbound.data_health_check_use_case import DataHealthCheckUseCase
+from app.domain.ports.inbound.document_ingestion_use_case import DocumentIngestionUseCase
 from app.domain.ports.inbound.document_use_case import DocumentUseCase
 from app.domain.ports.inbound.session_use_case import SessionUseCase
 from app.domain.ports.outbound.analytics_repository import AnalyticsRepository
@@ -33,3 +35,13 @@ async def get_document_use_case(request: Request) -> DocumentUseCase:
 async def get_session_use_case(request: Request) -> SessionUseCase:
     """Retorna o SessionUseCase registrado no estado da aplicação."""
     return request.app.state.session_service  # type: ignore[no-any-return]
+
+
+async def get_ingestion_service(request: Request) -> DocumentIngestionUseCase:
+    """Retorna o DocumentIngestionUseCase registrado no estado da aplicação."""
+    return request.app.state.ingestion_service  # type: ignore[no-any-return]
+
+
+async def get_health_check_service(request: Request) -> DataHealthCheckUseCase:
+    """Retorna o DataHealthCheckUseCase registrado no estado da aplicação."""
+    return request.app.state.health_check_service  # type: ignore[no-any-return]

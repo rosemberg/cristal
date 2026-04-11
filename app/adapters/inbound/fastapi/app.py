@@ -22,6 +22,7 @@ from app.adapters.inbound.fastapi.analytics_router import router as analytics_ro
 from app.adapters.inbound.fastapi.chat_router import router as chat_router
 from app.adapters.inbound.fastapi.document_router import router as document_router
 from app.adapters.inbound.fastapi.health_router import router as health_router
+from app.adapters.inbound.fastapi.ingestion_router import router as ingestion_router
 from app.adapters.inbound.fastapi.session_router import router as session_router
 
 logger = logging.getLogger(__name__)
@@ -90,6 +91,50 @@ async def _default_lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     app.state.document_service = DocumentService(document_repo=document_repo)
     app.state.session_service = SessionService(session_repo=session_repo)
 
+    # Serviços de ingestão e health check [V2]
+    from app.adapters.outbound.postgres.document_ingestion_repo import (
+        PostgresDocumentIngestionRepository,
+    )
+    from app.adapters.outbound.postgres.inconsistency_repo import PostgresInconsistencyRepository
+    from app.domain.services.data_health_check_service import DataHealthCheckService
+    from app.domain.services.document_ingestion_service import DocumentIngestionService
+
+    doc_ingestion_repo = PostgresDocumentIngestionRepository(pool)
+    inconsistency_repo = PostgresInconsistencyRepository(pool)
+
+    try:
+        from app.adapters.outbound.http.document_download_gateway import (
+            HttpDocumentDownloadGateway,
+        )
+        download_gw = HttpDocumentDownloadGateway()
+    except ImportError:
+        from app.adapters.outbound.http.document_downloader import HttpDocumentDownloader
+        download_gw = HttpDocumentDownloader()  # type: ignore[assignment]
+
+    try:
+        from app.adapters.outbound.process.document_process_gateway import (
+            DefaultDocumentProcessGateway,
+        )
+        process_gw = DefaultDocumentProcessGateway()
+    except ImportError:
+        from app.adapters.outbound.process.document_process_adapter import (
+            DocumentProcessAdapter,
+        )
+        process_gw = DocumentProcessAdapter()  # type: ignore[assignment]
+
+    app.state.ingestion_service = DocumentIngestionService(
+        document_repository=doc_ingestion_repo,
+        download_gateway=download_gw,
+        process_gateway=process_gw,
+        inconsistency_repository=inconsistency_repo,
+    )
+    app.state.health_check_service = DataHealthCheckService(
+        page_repository=PostgresPageRepository(pool),
+        document_repository=doc_ingestion_repo,
+        download_gateway=download_gw,
+        inconsistency_repository=inconsistency_repo,
+    )
+
     logger.info("Aplicação pronta")
     yield
 
@@ -132,7 +177,7 @@ def create_app(*, lifespan: Callable[..., Any] | None = None) -> FastAPI:
         CORSMiddleware,
         allow_origins=allowed_origins,
         allow_credentials=True,
-        allow_methods=["GET", "POST"],
+        allow_methods=["GET", "POST", "PATCH"],
         allow_headers=["*"],
     )
 
@@ -141,6 +186,7 @@ def create_app(*, lifespan: Callable[..., Any] | None = None) -> FastAPI:
     app.include_router(document_router)
     app.include_router(session_router)
     app.include_router(analytics_router)
+    app.include_router(ingestion_router)
 
     # Frontend estático (se existir)
     static_dir = Path(__file__).parents[4] / "static"

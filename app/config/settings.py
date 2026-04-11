@@ -39,6 +39,9 @@ class Settings(BaseSettings):
     chunk_overlap_tokens: int = 200
     max_document_size_mb: int = 50
 
+    # ── Admin ─────────────────────────────────────────────────────────────────
+    admin_api_key: str = ""
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_prefix="CRISTAL_",
