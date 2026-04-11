@@ -204,6 +204,16 @@ class FakeDocumentRepository(DocumentRepository):
     ) -> None:
         await self.save_content(document_url, content)
 
+    async def count_by_status(self) -> dict[str, int]:
+        pending = len(await self.list_pending())
+        return {"pending": pending, "processing": 0, "done": 0, "error": 0}
+
+    async def count_chunks(self) -> int:
+        return sum(len(d.chunks) for d in self._docs.values())
+
+    async def count_tables(self) -> int:
+        return sum(len(d.tables) for d in self._docs.values())
+
 
 class FakeSessionRepository(SessionRepository):
     """In-memory session repository for unit tests."""

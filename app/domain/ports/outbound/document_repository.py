@@ -62,3 +62,13 @@ class DocumentRepository(ABC):
         self, document_url: str, content: ProcessedDocument
     ) -> None: ...
     # Salva chunks e tabelas em transação única — rollback em caso de falha
+
+    @abstractmethod
+    async def count_by_status(self) -> dict[str, int]: ...
+    # {pending: N, processing: N, done: N, error: N}
+
+    @abstractmethod
+    async def count_chunks(self) -> int: ...
+
+    @abstractmethod
+    async def count_tables(self) -> int: ...

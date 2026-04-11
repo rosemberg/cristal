@@ -6,6 +6,17 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 
+class DownloadError(Exception):
+    """Base domain exception raised by DocumentDownloadGateway implementations.
+
+    Attributes:
+        is_size_limit: True if the download was rejected because the document
+            exceeds the configured size limit.
+    """
+
+    is_size_limit: bool = False
+
+
 @dataclass(frozen=True)
 class DownloadResult:
     """Result of a successful document download."""

@@ -23,6 +23,7 @@ import httpx
 from app.domain.ports.outbound.document_download_gateway import (
     AccessCheckResult,
     DocumentDownloadGateway,
+    DownloadError,
     DownloadResult,
 )
 
@@ -38,7 +39,7 @@ _USER_AGENT = (
 )
 
 
-class DocumentDownloadError(Exception):
+class DocumentDownloadError(DownloadError):
     """Raised when a document cannot be downloaded after all retries."""
 
 
@@ -106,10 +107,12 @@ class HttpDocumentDownloader(DocumentDownloadGateway):
 
                 if size_bytes > self._max_size_bytes:
                     max_mb = self._max_size_bytes // (1024 * 1024)
-                    raise DocumentDownloadError(
+                    err = DocumentDownloadError(
                         f"Document exceeds size limit: "
                         f"{size_bytes / 1024 / 1024:.1f}MB > {max_mb}MB: {url}"
                     )
+                    err.is_size_limit = True
+                    raise err
 
                 return DownloadResult(
                     content=content,

@@ -284,6 +284,27 @@ class PostgresDocumentRepository(DocumentRepository):
                         ],
                     )
 
+    async def count_by_status(self) -> dict[str, int]:
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT processing_status, COUNT(*) AS total
+                FROM documents
+                GROUP BY processing_status
+                """
+            )
+        return {row["processing_status"]: row["total"] for row in rows}
+
+    async def count_chunks(self) -> int:
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow("SELECT COUNT(*) AS total FROM document_chunks")
+        return row["total"] if row else 0
+
+    async def count_tables(self) -> int:
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow("SELECT COUNT(*) AS total FROM document_tables")
+        return row["total"] if row else 0
+
     async def save_content(self, document_url: str, content: ProcessedDocument) -> None:
         async with self._pool.acquire() as conn:
             async with conn.transaction():
