@@ -13,6 +13,7 @@ from app.domain.ports.outbound.llm_gateway import LLMGateway
 from app.domain.ports.outbound.search_repository import SearchRepository
 from app.domain.ports.outbound.session_repository import SessionRepository
 from app.domain.services.prompt_builder import PromptBuilder
+from app.domain.services.table_validator import TableValidatorAgent
 from app.domain.value_objects.chat_message import ChatMessage, Citation, MetricItem, TableData
 from app.domain.value_objects.intent import QueryIntent
 
@@ -51,6 +52,7 @@ class ChatService(ChatUseCase):
         analytics_repo: AnalyticsRepository,
         llm: LLMGateway,
         prompt_builder: PromptBuilder | None = None,
+        table_validator: TableValidatorAgent | None = None,
         top_k: int = 5,
     ) -> None:
         self._search = search_repo
@@ -58,6 +60,7 @@ class ChatService(ChatUseCase):
         self._analytics = analytics_repo
         self._llm = llm
         self._builder = prompt_builder or PromptBuilder()
+        self._table_validator = table_validator or TableValidatorAgent()
         self._top_k = top_k
 
     async def process_message(
@@ -75,6 +78,9 @@ class ChatService(ChatUseCase):
         pages = await self._search.search_pages(message, top_k=self._top_k)
         chunks = await self._search.search_chunks(message, top_k=self._top_k)
         tables = await self._search.search_tables(message)
+
+        # 2b. Validate, deduplicate and rank tables
+        tables = self._table_validator.select_best_tables(tables)
 
         # 3. Build prompt
         system_prompt = self._builder.build_system_prompt()

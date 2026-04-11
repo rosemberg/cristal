@@ -45,8 +45,10 @@ respondendo perguntas sobre licitações, contratos, servidores, orçamento, ele
 - Responda sempre em português do Brasil, de forma clara, amigável e objetiva.
 - Base suas respostas exclusivamente nas informações do contexto fornecido.
 - **APRESENTE os dados diretamente na resposta.** Nunca diga apenas "consulte o arquivo" ou "os dados podem ser encontrados no link". Extraia e mostre os valores, nomes, datas e números que estão no contexto.
-- Quando houver dados tabulares (tabelas, planilhas, CSVs), organize-os em tabela estruturada no campo "tables" do JSON. Adicione uma última linha com totais quando houver colunas numéricas.
+- Quando houver dados tabulares (tabelas, planilhas, CSVs), organize-os em tabela estruturada no campo **"tables"** do JSON. Adicione uma última linha com totais quando houver colunas numéricas.
+- **JAMAIS coloque conteúdo bruto de CSV, trechos com ponto-e-vírgula (;;;) ou pipe (|||) no campo "text".** O campo "text" deve conter apenas texto legível em Markdown. Dados tabulares vão exclusivamente em "tables".
 - Se houver muitos registros, apresente todos os disponíveis no contexto (até 30 linhas). Informe o total se houver mais.
+- **Use os dados EXATAMENTE como fornecidos no contexto.** Não invente, não reordene nem modifique nomes, cargos, valores ou datas.
 - **SEMPRE cite a fonte** de cada informação com o link completo no campo "sources".
 - Se a informação não estiver disponível no contexto, informe isso honestamente.
 - Sugira perguntas relacionadas que ajudem o cidadão a explorar mais dados.
@@ -127,13 +129,19 @@ class PromptBuilder:
                 parts.append(line)
 
         if chunks:
-            parts.append("\n## Trechos de documentos")
-            for cm in chunks:
-                parts.append(
-                    f"### {cm.document_title}\n"
-                    f"Fonte: {cm.document_url}\n"
-                    f"{cm.chunk.text}"
-                )
+            # Exclude chunks from documents that already have structured tables —
+            # sending the same data twice (raw text + structured) confuses the LLM.
+            # Tables are pre-validated by TableValidatorAgent before reaching here.
+            table_urls = {t.document_url for t in tables}
+            filtered_chunks = [cm for cm in chunks if cm.document_url not in table_urls]
+            if filtered_chunks:
+                parts.append("\n## Trechos de documentos")
+                for cm in filtered_chunks:
+                    parts.append(
+                        f"### {cm.document_title}\n"
+                        f"Fonte: {cm.document_url}\n"
+                        f"{cm.chunk.text}"
+                    )
 
         if tables:
             parts.append("\n## Tabelas encontradas")
@@ -142,7 +150,11 @@ class PromptBuilder:
                 sep = " | ".join("---" for _ in table.headers)
                 rows = "\n".join(" | ".join(row) for row in table.rows[:30])
                 title = table.caption or "Tabela"
-                parts.append(f"### {title}\n{header}\n{sep}\n{rows}")
+                parts.append(
+                    f"### {title}\n"
+                    f"Fonte: {table.document_url}\n"
+                    f"{header}\n{sep}\n{rows}"
+                )
 
         return "\n".join(parts)
 
