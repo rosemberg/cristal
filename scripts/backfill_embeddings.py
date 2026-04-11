@@ -37,9 +37,37 @@ logger = logging.getLogger("backfill")
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
+# text-embedding-005: limite de 20.000 tokens por chamada.
+# Margem segura: 15.000. Estimativa: 1 token ≈ 4 caracteres.
+_MAX_TOKENS_PER_CALL = 15_000
+_CHARS_PER_TOKEN = 4
+
 
 def _sha256(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _split_by_tokens(
+    items: list[tuple[int, str]], max_tokens: int = _MAX_TOKENS_PER_CALL
+) -> list[list[tuple[int, str]]]:
+    """Divide itens em sub-lotes respeitando o limite de tokens estimados."""
+    batches: list[list[tuple[int, str]]] = []
+    current: list[tuple[int, str]] = []
+    current_tokens = 0
+
+    for item_id, text in items:
+        estimated = max(1, len(text) // _CHARS_PER_TOKEN)
+        if current and current_tokens + estimated > max_tokens:
+            batches.append(current)
+            current = []
+            current_tokens = 0
+        current.append((item_id, text))
+        current_tokens += estimated
+
+    if current:
+        batches.append(current)
+
+    return batches
 
 
 def _vec_to_str(embedding: list[float]) -> str:
@@ -137,7 +165,13 @@ async def _process_source_type(
     model_name: str,
     dry_run: bool,
 ) -> tuple[int, int]:
-    """Processa todos os itens de um source_type. Retorna (processados, falhas)."""
+    """Processa todos os itens de um source_type. Retorna (processados, falhas).
+
+    O batching é feito por tokens estimados (não por quantidade de itens)
+    para respeitar o limite de 20.000 tokens/chamada do text-embedding-005.
+    O parâmetro batch_size é usado como limite de itens por lote antes da
+    divisão por tokens (duplo controle: itens + tokens).
+    """
     processed = 0
     failures = 0
     total = len(items)
@@ -147,17 +181,23 @@ async def _process_source_type(
         logger.info("[%s] --dry-run: nenhuma persistência.", source_type)
         return 0, 0
 
+    # Divide primeiro por batch_size (itens), depois cada sub-lote por tokens
+    item_batches: list[list[tuple[int, str]]] = []
     for i in range(0, total, batch_size):
-        batch = items[i : i + batch_size]
+        item_chunk = items[i : i + batch_size]
+        item_batches.extend(_split_by_tokens(item_chunk))
+
+    total_batches = len(item_batches)
+
+    for batch_num, batch in enumerate(item_batches, start=1):
         ids = [item[0] for item in batch]
         texts = [item[1] for item in batch]
-        batch_num = i // batch_size + 1
-        total_batches = (total + batch_size - 1) // batch_size
+        est_tokens = sum(len(t) // _CHARS_PER_TOKEN for t in texts)
 
         logger.info(
-            "[%s] Batch %d/%d — %d textos (ids %d..%d)",
+            "[%s] Batch %d/%d — %d textos / ~%d tokens estimados (ids %d..%d)",
             source_type, batch_num, total_batches,
-            len(batch), ids[0], ids[-1],
+            len(batch), est_tokens, ids[0], ids[-1],
         )
 
         try:

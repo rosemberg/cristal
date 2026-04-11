@@ -31,6 +31,39 @@ logger = logging.getLogger(__name__)
 
 _RETRY_BASE_DELAY = 0.5  # segundos — multiplicado por 2^attempt
 
+# Limite de tokens por chamada à API (text-embedding-005 suporta 20.000).
+# Usamos 15.000 como margem segura. Estimativa: 1 token ≈ 4 caracteres.
+_MAX_TOKENS_PER_CALL = 15_000
+_CHARS_PER_TOKEN = 4
+
+
+def _split_by_tokens(
+    texts: list[str], max_tokens: int = _MAX_TOKENS_PER_CALL
+) -> list[list[str]]:
+    """Divide lista de textos em sub-lotes respeitando o limite de tokens.
+
+    Estimativa simples: len(text) / 4 ≈ tokens. Cada texto entra sozinho
+    no pior caso (texto individual > max_tokens é enviado assim mesmo —
+    a API retornará erro 400 nesse caso extremo, capturado pelo retry).
+    """
+    batches: list[list[str]] = []
+    current: list[str] = []
+    current_tokens = 0
+
+    for text in texts:
+        estimated = max(1, len(text) // _CHARS_PER_TOKEN)
+        if current and current_tokens + estimated > max_tokens:
+            batches.append(current)
+            current = []
+            current_tokens = 0
+        current.append(text)
+        current_tokens += estimated
+
+    if current:
+        batches.append(current)
+
+    return batches
+
 
 class VertexEmbeddingGateway(EmbeddingGateway):
     """Adapter que conecta EmbeddingGateway ao Vertex AI text-embedding-005."""
@@ -206,23 +239,33 @@ class VertexEmbeddingGateway(EmbeddingGateway):
         texts: list[str],
         task_type: str = "RETRIEVAL_DOCUMENT",
     ) -> list[list[float]]:
-        """Gera embeddings em batch, dividindo em lotes de `max_batch_size`."""
+        """Gera embeddings em batch com dois níveis de divisão:
+
+        1. Divide em sub-lotes de até `max_batch_size` itens (quota de itens).
+        2. Dentro de cada sub-lote, divide por tokens estimados para respeitar
+           o limite de 20.000 tokens/chamada do text-embedding-005.
+        """
         if not texts:
             return []
 
         self._assert_circuit_closed()
 
         all_results: list[list[float]] = []
+
+        # Primeiro nível: divide por número de itens
         for i in range(0, len(texts), self._max_batch_size):
-            batch = texts[i : i + self._max_batch_size]
-            logger.debug(
-                "EmbeddingGateway: processando batch %d–%d de %d textos",
-                i,
-                i + len(batch),
-                len(texts),
-            )
-            batch_result = await self._embed_with_retry(batch, task_type)
-            all_results.extend(batch_result)
+            item_batch = texts[i : i + self._max_batch_size]
+
+            # Segundo nível: divide por tokens estimados
+            token_batches = _split_by_tokens(item_batch)
+            for token_batch in token_batches:
+                logger.debug(
+                    "EmbeddingGateway: batch %d textos / ~%d tokens estimados",
+                    len(token_batch),
+                    sum(len(t) // _CHARS_PER_TOKEN for t in token_batch),
+                )
+                batch_result = await self._embed_with_retry(token_batch, task_type)
+                all_results.extend(batch_result)
 
         return all_results
 
