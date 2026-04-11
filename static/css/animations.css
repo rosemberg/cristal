@@ -1,0 +1,73 @@
+/* ===== Cristal 2.0 — Animations & Transitions ===== */
+
+/* ----- Status dot pulse ----- */
+.status-dot::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  background: #6ee7b7;
+  animation: statusPing 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+@keyframes statusPing {
+  0%        { transform: scale(1);   opacity: 0.7; }
+  75%, 100% { transform: scale(2.2); opacity: 0;   }
+}
+
+/* ----- Categories loading dots ----- */
+@keyframes categoriesDot {
+  0%, 80%, 100% { transform: scale(0.5); opacity: 0.3; }
+  40%           { transform: scale(1.2); opacity: 1;   }
+}
+
+.categories-loading span:nth-child(1) { animation: categoriesDot 1.2s 0.0s infinite ease-in-out; }
+.categories-loading span:nth-child(2) { animation: categoriesDot 1.2s 0.2s infinite ease-in-out; }
+.categories-loading span:nth-child(3) { animation: categoriesDot 1.2s 0.4s infinite ease-in-out; }
+
+/* ----- Docs panel fade-in (desktop) ----- */
+@media (min-width: 1024px) {
+  .docs-panel:not([hidden]) {
+    animation: docsPanelFadeIn 0.2s ease forwards;
+  }
+}
+
+@keyframes docsPanelFadeIn {
+  from { opacity: 0; transform: translateX(12px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* ----- Docs panel slide-up (mobile bottom-sheet) ----- */
+@media (max-width: 1023px) {
+  .docs-panel:not([hidden]) {
+    animation: docsPanelUp 0.28s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  }
+}
+
+@keyframes docsPanelUp {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0);    }
+}
+
+/* ----- Sidebar item hover accent ----- */
+.category-item::before {
+  content: '';
+  display: inline-block;
+  width: 3px;
+  height: 0;
+  background: var(--color-primary-500);
+  border-radius: 2px;
+  margin-right: 0;
+  transition: height 0.15s ease, margin-right 0.15s ease;
+  flex-shrink: 0;
+}
+.category-item:hover::before {
+  height: 14px;
+  margin-right: 6px;
+}
+
+/* ----- New chat button shimmer ----- */
+.new-chat-btn:focus-visible {
+  outline: 2px solid var(--color-primary-500);
+  outline-offset: 2px;
+}
