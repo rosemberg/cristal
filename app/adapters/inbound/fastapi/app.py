@@ -62,7 +62,11 @@ async def _default_lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     document_repo = PostgresDocumentRepository(pool)
     session_repo = PostgresSessionRepository(pool)
     analytics_repo = PostgresAnalyticsRepository(pool)
-    llm = VertexAIGateway(settings)
+    llm = VertexAIGateway(
+        project_id=settings.vertex_project_id,
+        location=settings.vertex_location,
+        model_name=settings.vertex_model,
+    )
 
     app.state.search_repo = search_repo
     app.state.analytics_repo = analytics_repo
