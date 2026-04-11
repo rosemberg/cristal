@@ -269,7 +269,11 @@
     var card = document.createElement('div');
     card.className = 'flex-1 min-w-0 bg-white rounded-2xl rounded-tl-none shadow-md shadow-gray-200/60 border border-gray-200 overflow-hidden';
 
-    var citations   = data.citations   || [];  // [{number, title, url}]
+    // Mapeia sources (novo formato) → citations (formato do renderer)
+    var rawSources  = data.sources     || [];
+    var citations   = rawSources.map(function (s, i) {
+      return { number: i + 1, title: s.document_title, url: s.document_url, snippet: s.snippet };
+    });
     var tables      = data.tables      || [];  // [{title, headers[], rows[][]}]
     var queryId     = data.query_id    || null;
 
@@ -280,6 +284,18 @@
     header.innerHTML = '<span class="inline-flex items-center gap-2 text-[11px] font-bold tracking-widest text-brand-600 uppercase">'
       + ICONS.fileText + ' ' + Utils.escapeHtml(label) + '</span>';
     card.appendChild(header);
+
+    // ── Metrics cards (KPIs) ──
+    var metricsData = data.metrics || [];
+    if (metricsData.length) {
+      var metricsHtml = Utils.renderMetricsCards(metricsData);
+      if (metricsHtml) {
+        var metricsWrap = document.createElement('div');
+        metricsWrap.className = 'px-5 pb-2';
+        metricsWrap.innerHTML = metricsHtml;
+        card.appendChild(metricsWrap);
+      }
+    }
 
     // ── Texto principal (com citações inline) ──
     if (data.text) {
@@ -314,8 +330,8 @@
       }
     }
 
-    // ── Links úteis ──
-    if (data.links && data.links.length) {
+    // ── Links úteis (derivados de sources) ──
+    if (rawSources.length) {
       var linksSection = document.createElement('div');
       linksSection.className = 'px-5 pb-4 space-y-1.5';
 
@@ -326,7 +342,12 @@
 
       var ul = document.createElement('ul');
       ul.className = 'space-y-0.5';
-      data.links.forEach(function (lk) {
+      // Deduplica por URL
+      var seenUrls = {};
+      rawSources.forEach(function (s) {
+        if (!s.document_url || seenUrls[s.document_url]) return;
+        seenUrls[s.document_url] = true;
+        var lk = { title: s.document_title || s.document_url, url: s.document_url, type: 'page' };
         var li = document.createElement('li');
         li.appendChild(buildLinkItem(lk));
         ul.appendChild(li);
@@ -335,8 +356,15 @@
       card.appendChild(linksSection);
     }
 
-    // ── Conteúdo extraído (accordion) ──
-    if (data.extracted_content) {
+    // ── Conteúdo extraído (accordion) — de extracted_content ou snippets de sources ──
+    var extractedContent = data.extracted_content || null;
+    if (!extractedContent && rawSources.length) {
+      var snippets = rawSources
+        .filter(function (s) { return s.snippet && s.snippet.trim(); })
+        .map(function (s) { return s.snippet.trim(); });
+      if (snippets.length) extractedContent = snippets.join('\n\n');
+    }
+    if (extractedContent) {
       var accWrap = document.createElement('div');
       accWrap.className = 'px-5 pb-4';
 
@@ -351,7 +379,7 @@
 
       var body = document.createElement('div');
       body.className = 'accordion-body extracted-content text-sm leading-relaxed text-gray-600 border-t border-gray-200 bg-white break-words';
-      body.innerHTML = Utils.formatExtractedContent(data.extracted_content);
+      body.innerHTML = Utils.formatExtractedContent(extractedContent);
 
       accordion.appendChild(toggle);
       accordion.appendChild(body);

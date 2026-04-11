@@ -33,28 +33,91 @@
   }
 
   /* ===== markdownToHtml ===== */
-  /* Converte markdown simples para HTML (texto do LLM) */
+  /* Converte markdown para HTML com suporte a headers, listas ol/ul e bold */
   function markdownToHtml(text, citations) {
     if (!text) return '';
-    var html = escapeHtml(text);
-    // Links markdown
-    html = html.replace(
-      /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
-      '<a href="$2" target="_blank" rel="noopener noreferrer" class="ec-inline-link">$1</a>'
-    );
-    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-    html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
-    html = html.replace(/`(.+?)`/g, '<code>$1</code>');
-    // Listas
-    html = html.replace(/^[-*] (.+)$/gm, '<li>$1</li>');
-    html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
-    html = html.replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>');
-    // Parágrafos
-    html = html.replace(/\n\n+/g, '</p><p>');
-    html = html.replace(/\n/g, '<br>');
-    html = '<p>' + html + '</p>';
-    html = html.replace(/<p><\/p>/g, '');
-    // Citações inline [n]
+
+    function processInline(line) {
+      var h = escapeHtml(line);
+      h = h.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
+        '<a href="$2" target="_blank" rel="noopener noreferrer" class="ec-inline-link">$1</a>');
+      h = h.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+      h = h.replace(/\*(.+?)\*/g, '<em>$1</em>');
+      h = h.replace(/`(.+?)`/g, '<code>$1</code>');
+      return h;
+    }
+
+    var lines = text.split('\n');
+    var parts = [];
+    var listBuf = [];
+    var listType = null;
+    var paraBuf = [];
+
+    function flushList() {
+      if (!listBuf.length) return;
+      parts.push('<' + listType + '>' + listBuf.join('') + '</' + listType + '>');
+      listBuf = [];
+      listType = null;
+    }
+
+    function flushPara() {
+      if (!paraBuf.length) return;
+      parts.push('<p>' + paraBuf.join('<br>') + '</p>');
+      paraBuf = [];
+    }
+
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+      var trimmed = line.trim();
+
+      if (!trimmed) {
+        flushList();
+        flushPara();
+        continue;
+      }
+
+      // ### Header
+      if (/^### /.test(trimmed)) {
+        flushList(); flushPara();
+        parts.push('<h3 class="md-h3">' + processInline(trimmed.slice(4)) + '</h3>');
+        continue;
+      }
+
+      // ## Header
+      if (/^## /.test(trimmed)) {
+        flushList(); flushPara();
+        parts.push('<h2 class="md-h2">' + processInline(trimmed.slice(3)) + '</h2>');
+        continue;
+      }
+
+      // Ordered list item
+      var olMatch = trimmed.match(/^(\d+)\. (.+)$/);
+      if (olMatch) {
+        flushPara();
+        if (listType !== 'ol') { flushList(); listType = 'ol'; }
+        listBuf.push('<li>' + processInline(olMatch[2]) + '</li>');
+        continue;
+      }
+
+      // Unordered list item
+      var ulMatch = trimmed.match(/^[-*] (.+)$/);
+      if (ulMatch) {
+        flushPara();
+        if (listType !== 'ul') { flushList(); listType = 'ul'; }
+        listBuf.push('<li>' + processInline(ulMatch[1]) + '</li>');
+        continue;
+      }
+
+      // Regular paragraph line
+      flushList();
+      paraBuf.push(processInline(line));
+    }
+
+    flushList();
+    flushPara();
+
+    var html = parts.join('');
+
     if (citations && citations.length) {
       html = renderCitationRefs(html, citations);
     }
@@ -97,8 +160,18 @@
 
   /* ===== renderTablesSection ===== */
   /* Renderiza field tables[] da resposta (estruturado: {title, headers[], rows[][]}) */
+  /* Adiciona linha de totalização automática para colunas numéricas */
   function renderTablesSection(tables) {
     if (!tables || !tables.length) return '';
+
+    function parseBrNumber(str) {
+      if (str == null) return NaN;
+      var s = String(str).replace(/[R$\s%]/g, '');
+      s = s.replace(/\.(\d{3})/g, '$1'); // remove separador de milhar (ponto antes de 3 dígitos)
+      s = s.replace(',', '.');
+      return parseFloat(s);
+    }
+
     var html = '';
     tables.forEach(function (tbl) {
       if (!tbl.headers || !tbl.rows || !tbl.rows.length) return;
@@ -118,8 +191,64 @@
         });
         html += '</tr>';
       });
-      html += '</tbody></table></div>';
+      html += '</tbody>';
+
+      // Detecta colunas numéricas e calcula totais
+      var colCount = tbl.headers.length;
+      var colSums = new Array(colCount).fill(0);
+      var colNumeric = new Array(colCount).fill(0);
+      var colHasDecimal = new Array(colCount).fill(false);
+
+      tbl.rows.forEach(function (row) {
+        var cells = Array.isArray(row) ? row : [row];
+        cells.forEach(function (cell, ci) {
+          var v = parseBrNumber(cell);
+          if (!isNaN(v)) {
+            colSums[ci] += v;
+            colNumeric[ci]++;
+            if (String(cell).indexOf(',') !== -1 || (String(cell).replace(/[R$\s]/g, '').indexOf('.') !== -1 && !/^\d{1,3}(\.\d{3})+$/.test(String(cell).replace(/[R$\s]/g, '')))) {
+              colHasDecimal[ci] = true;
+            }
+          }
+        });
+      });
+
+      var threshold = Math.ceil(tbl.rows.length / 2);
+      var hasNumericCol = colNumeric.some(function (n) { return n >= threshold; });
+
+      if (hasNumericCol) {
+        html += '<tfoot><tr>';
+        tbl.headers.forEach(function (_, ci) {
+          if (colNumeric[ci] < threshold) {
+            html += '<td class="ec-table-total-label">' + (ci === 0 ? '<strong>Total</strong>' : '') + '</td>';
+          } else {
+            var sum = colSums[ci];
+            var display = colHasDecimal[ci]
+              ? sum.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+              : sum.toLocaleString('pt-BR');
+            html += '<td class="ec-table-total"><strong>' + escapeHtml(display) + '</strong></td>';
+          }
+        });
+        html += '</tr></tfoot>';
+      }
+
+      html += '</table></div>';
     });
+    return html;
+  }
+
+  /* ===== renderMetricsCards ===== */
+  /* Renderiza campo metrics[] como cards horizontais de KPI */
+  function renderMetricsCards(metrics) {
+    if (!metrics || !metrics.length) return '';
+    var html = '<div class="metrics-cards">';
+    metrics.forEach(function (m) {
+      html += '<div class="metric-card">'
+        + '<span class="metric-value">' + escapeHtml(String(m.value || '')) + '</span>'
+        + '<span class="metric-label">' + escapeHtml(String(m.label || '')) + '</span>'
+        + '</div>';
+    });
+    html += '</div>';
     return html;
   }
 
@@ -336,12 +465,13 @@
 
   /* ===== Export ===== */
   root.Utils = {
-    escapeHtml:            escapeHtml,
-    inlineMarkdown:        inlineMarkdown,
-    markdownToHtml:        markdownToHtml,
-    renderCitationRefs:    renderCitationRefs,
-    buildCitationsSection: buildCitationsSection,
-    renderTablesSection:   renderTablesSection,
+    escapeHtml:             escapeHtml,
+    inlineMarkdown:         inlineMarkdown,
+    markdownToHtml:         markdownToHtml,
+    renderCitationRefs:     renderCitationRefs,
+    buildCitationsSection:  buildCitationsSection,
+    renderTablesSection:    renderTablesSection,
+    renderMetricsCards:     renderMetricsCards,
     formatExtractedContent: formatExtractedContent,
   };
 

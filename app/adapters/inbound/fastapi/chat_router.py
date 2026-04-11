@@ -11,6 +11,7 @@ from app.adapters.inbound.fastapi.schemas import (
     ChatRequest,
     ChatResponse,
     CitationOut,
+    MetricItemOut,
     SuggestResponse,
     TableDataOut,
     TransparencyMapItem,
@@ -54,7 +55,15 @@ async def post_chat(
         for t in message.tables
     ]
 
-    return ChatResponse(text=message.content, sources=sources, tables=tables)
+    metrics = [MetricItemOut(label=m.label, value=m.value) for m in message.metrics]
+
+    return ChatResponse(
+        text=message.content,
+        sources=sources,
+        tables=tables,
+        suggestions=message.suggestions,
+        metrics=metrics,
+    )
 
 
 @router.get("/suggest", response_model=SuggestResponse)

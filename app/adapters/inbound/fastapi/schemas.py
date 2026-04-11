@@ -34,11 +34,17 @@ class TableDataOut(BaseModel):
     page_number: int | None = None
 
 
+class MetricItemOut(BaseModel):
+    label: str
+    value: str
+
+
 class ChatResponse(BaseModel):
     text: str
     sources: list[CitationOut]
     tables: list[TableDataOut]
     suggestions: list[str] = Field(default_factory=list)
+    metrics: list[MetricItemOut] = Field(default_factory=list)
 
 
 class SuggestResponse(BaseModel):

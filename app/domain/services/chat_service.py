@@ -13,7 +13,7 @@ from app.domain.ports.outbound.llm_gateway import LLMGateway
 from app.domain.ports.outbound.search_repository import SearchRepository
 from app.domain.ports.outbound.session_repository import SessionRepository
 from app.domain.services.prompt_builder import PromptBuilder
-from app.domain.value_objects.chat_message import ChatMessage, Citation, TableData
+from app.domain.value_objects.chat_message import ChatMessage, Citation, MetricItem, TableData
 from app.domain.value_objects.intent import QueryIntent
 
 # ---------------------------------------------------------------------------
@@ -131,6 +131,8 @@ class ChatService(ChatUseCase):
         text = data.get("text") or data.get("content") or raw
         raw_sources = data.get("sources") or []
         raw_tables = data.get("tables") or []
+        raw_suggestions = data.get("suggestions") or []
+        raw_metrics = data.get("metrics") or []
 
         sources: list[Citation] = []
         for s in raw_sources if isinstance(raw_sources, list) else []:
@@ -159,7 +161,19 @@ class ChatService(ChatUseCase):
                     )
                 )
 
-        return ChatMessage(role="assistant", content=str(text), sources=sources, tables=tables)
+        suggestions = [str(s) for s in raw_suggestions if isinstance(s, str)] if isinstance(raw_suggestions, list) else []
+
+        metrics: list[MetricItem] = []
+        for m in raw_metrics if isinstance(raw_metrics, list) else []:
+            if isinstance(m, dict):
+                metrics.append(
+                    MetricItem(
+                        label=str(m.get("label") or ""),
+                        value=str(m.get("value") or ""),
+                    )
+                )
+
+        return ChatMessage(role="assistant", content=str(text), sources=sources, tables=tables, suggestions=suggestions, metrics=metrics)
 
     @staticmethod
     def _extract_json(raw: str) -> dict[str, object] | None:
