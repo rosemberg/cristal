@@ -9,6 +9,53 @@ from uuid import UUID
 
 import pytest
 
+from app.config.settings import Settings
+
+
+# ---------------------------------------------------------------------------
+# Docker / testcontainers — um único container compartilhado por sessão
+# ---------------------------------------------------------------------------
+# Imports são feitos dentro das funções para não quebrar testes unitários
+# que rodam sem docker/testcontainers instalados no ambiente.
+
+
+def _docker_available() -> bool:
+    """Verifica se o Docker daemon está acessível."""
+    try:
+        import docker  # noqa: PLC0415
+        docker.from_env().ping()
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+@pytest.fixture(scope="session")
+def postgres_container():  # type: ignore[no-untyped-def]
+    """Sobe UM PostgreSQL real via Docker, compartilhado por toda a sessão pytest."""
+    from testcontainers.postgres import PostgresContainer  # noqa: PLC0415
+
+    if not _docker_available():
+        pytest.skip("Docker daemon não está disponível.")
+    with PostgresContainer("postgres:16-alpine") as pg:
+        yield pg
+
+
+@pytest.fixture(scope="session")
+def pg_settings(postgres_container) -> Settings:  # type: ignore[no-untyped-def]
+    """Settings apontando para o PostgreSQL do testcontainer compartilhado."""
+    url = postgres_container.get_connection_url()
+    asyncpg_url = (
+        url.replace("postgresql+psycopg2://", "postgresql+asyncpg://")
+           .replace("postgresql://", "postgresql+asyncpg://")
+    )
+    return Settings(
+        vertex_project_id="test-project",
+        database_url=asyncpg_url,
+        db_pool_min=1,
+        db_pool_max=5,
+        _env_file=None,  # type: ignore[call-arg]
+    )
+
 from app.domain.entities.chunk import DocumentChunk
 from app.domain.entities.document import Document
 from app.domain.entities.document_table import DocumentTable
@@ -188,11 +235,15 @@ class FakeDocumentRepository(DocumentRepository):
             self._docs[document_url].tables = content.tables
             self._docs[document_url].is_processed = True
 
-    async def list_pending(self, limit: int = 50) -> list[Document]:
-        return [d for d in self._docs.values() if not d.is_processed][:limit]
+    async def list_pending(self, limit: int = 0) -> list[Document]:
+        docs = [d for d in self._docs.values() if not d.is_processed]
+        return docs if limit == 0 else docs[:limit]
 
     async def list_errors(self) -> list[Document]:
         return []
+
+    async def reset_stuck_processing(self, stuck_minutes: int = 30) -> int:
+        return 0
 
     async def update_status(
         self, document_url: str, status: str, error: str | None = None
