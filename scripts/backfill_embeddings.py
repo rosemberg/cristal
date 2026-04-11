@@ -263,6 +263,7 @@ async def run(batch_size: int, source_types: list[str], dry_run: bool) -> None:
         project_id=settings.vertex_project_id,
         location=settings.vertex_location,
         model_name=model_name,
+        output_dimensionality=settings.embedding_dimensions,
         max_batch_size=batch_size,
         cache_max_size=0,  # sem cache em backfill — todos são documentos novos
     )

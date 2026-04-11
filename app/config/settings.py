@@ -39,6 +39,13 @@ class Settings(BaseSettings):
     chunk_overlap_tokens: int = 200
     max_document_size_mb: int = 50
 
+    # ── Embeddings ────────────────────────────────────────────────────────────
+    vertex_embedding_model: str = "gemini-embedding-001"
+    embedding_dimensions: int = 768        # output_dimensionality (schema DB = 768)
+    embedding_cache_max_size: int = 256
+    embedding_circuit_breaker_threshold: int = 3
+    embedding_circuit_breaker_timeout: float = 60.0
+
     # ── Admin ─────────────────────────────────────────────────────────────────
     admin_api_key: str = ""
 

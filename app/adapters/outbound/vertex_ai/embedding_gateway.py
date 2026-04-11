@@ -1,7 +1,7 @@
 """Vertex AI adapter — VertexEmbeddingGateway.
 
-Implementa EmbeddingGateway usando o modelo `text-embedding-005` (768 dims)
-via Vertex AI SDK (TextEmbeddingModel).
+Implementa EmbeddingGateway usando `gemini-embedding-001` (3072 dims nativos,
+configurável via output_dimensionality) via Vertex AI SDK (TextEmbeddingModel).
 
 Recursos:
 - **LRU cache** (OrderedDict): embeddings de queries são cacheados em memória
@@ -11,8 +11,10 @@ Recursos:
   O chamador (HybridSearchService) faz fallback para FTS nesse período.
 - **Exponential backoff**: retries com delay 0.5 × 2^attempt antes de contar
   como falha definitiva no circuit breaker.
-- **Batching**: textos são enviados em lotes de até `max_batch_size` (padrão 100)
-  para respeitar a quota do Vertex AI.
+- **Batching por tokens**: textos são divididos em lotes respeitando o limite
+  de tokens por chamada (15.000 tokens estimados como margem segura).
+- **output_dimensionality**: reduz os vetores de 3072 → 768 para compatibilidade
+  com o schema do banco (vector(768)). Pode ser alterado via settings.
 """
 
 from __future__ import annotations
@@ -31,8 +33,9 @@ logger = logging.getLogger(__name__)
 
 _RETRY_BASE_DELAY = 0.5  # segundos — multiplicado por 2^attempt
 
-# Limite de tokens por chamada à API (text-embedding-005 suporta 20.000).
-# Usamos 15.000 como margem segura. Estimativa: 1 token ≈ 4 caracteres.
+# gemini-embedding-001: até 8.192 tokens por texto individual.
+# Usamos 15.000 tokens estimados por chamada como margem segura.
+# Estimativa: 1 token ≈ 4 caracteres.
 _MAX_TOKENS_PER_CALL = 15_000
 _CHARS_PER_TOKEN = 4
 
@@ -66,16 +69,17 @@ def _split_by_tokens(
 
 
 class VertexEmbeddingGateway(EmbeddingGateway):
-    """Adapter que conecta EmbeddingGateway ao Vertex AI text-embedding-005."""
+    """Adapter que conecta EmbeddingGateway ao Vertex AI gemini-embedding-001."""
 
-    DIMENSIONS = 768
+    DEFAULT_DIMENSIONS = 768          # compatível com schema vector(768)
     DEFAULT_MAX_BATCH_SIZE = 100
 
     def __init__(
         self,
         project_id: str,
         location: str,
-        model_name: str = "text-embedding-005",
+        model_name: str = "gemini-embedding-001",
+        output_dimensionality: int = DEFAULT_DIMENSIONS,
         max_batch_size: int = DEFAULT_MAX_BATCH_SIZE,
         cache_max_size: int = 256,
         circuit_breaker_threshold: int = 3,
@@ -86,8 +90,11 @@ class VertexEmbeddingGateway(EmbeddingGateway):
         Args:
             project_id: GCP project ID.
             location: GCP region (e.g. "us-central1").
-            model_name: Vertex AI embedding model (default: "text-embedding-005").
-            max_batch_size: Máximo de textos por chamada à API (≤ 250 para quota segura).
+            model_name: Vertex AI embedding model (default: "gemini-embedding-001").
+            output_dimensionality: Dimensões do vetor de saída. gemini-embedding-001
+                produz 3072 dims nativo; usamos 768 para compatibilidade com o
+                schema do banco. Deve coincidir com o vector(N) da tabela embeddings.
+            max_batch_size: Máximo de textos por chamada à API.
             cache_max_size: Capacidade máxima do LRU cache de queries.
             circuit_breaker_threshold: Falhas consecutivas para abrir o circuit breaker.
             circuit_breaker_timeout: Segundos que o circuit breaker permanece aberto.
@@ -96,6 +103,7 @@ class VertexEmbeddingGateway(EmbeddingGateway):
         import vertexai  # noqa: PLC0415 — lazy import para reduzir memória em testes
         vertexai.init(project=project_id, location=location)
         self._model_name = model_name
+        self._output_dimensionality = output_dimensionality
         self._max_batch_size = max_batch_size
         self._max_retries = max_retries
 
@@ -162,11 +170,18 @@ class VertexEmbeddingGateway(EmbeddingGateway):
     # ── Vertex AI call (síncrono, executado em thread) ───────────────────────
 
     def _call_vertex_sync(self, texts: list[str], task_type: str) -> list[list[float]]:
-        """Chamada síncrona ao Vertex AI SDK — executa em asyncio.to_thread."""
+        """Chamada síncrona ao Vertex AI SDK — executa em asyncio.to_thread.
+
+        output_dimensionality reduz os vetores de 3072 → N dims configuradas,
+        mantendo compatibilidade com o schema vector(768) do banco.
+        """
         from vertexai.language_models import TextEmbeddingInput, TextEmbeddingModel  # noqa: PLC0415
         model = TextEmbeddingModel.from_pretrained(self._model_name)
         inputs = [TextEmbeddingInput(text, task_type=task_type) for text in texts]
-        embeddings = model.get_embeddings(inputs)
+        embeddings = model.get_embeddings(
+            inputs,
+            output_dimensionality=self._output_dimensionality,
+        )
         return [list(e.values) for e in embeddings]
 
     # ── Retry com exponential backoff ────────────────────────────────────────

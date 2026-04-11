@@ -89,6 +89,7 @@ async def _default_lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
             project_id=settings.vertex_project_id,
             location=settings.vertex_location,
             model_name=settings.vertex_embedding_model,
+            output_dimensionality=settings.embedding_dimensions,
             cache_max_size=settings.embedding_cache_max_size,
             circuit_breaker_threshold=settings.embedding_circuit_breaker_threshold,
             circuit_breaker_timeout=settings.embedding_circuit_breaker_timeout,
