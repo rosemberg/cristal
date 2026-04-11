@@ -198,7 +198,26 @@ if [ "$DO_BACKFILL" = true ]; then
     fi
 fi
 
-# ── 6. Subir o servidor ───────────────────────────────────────────────────────
+# ── 6. Liberar porta ──────────────────────────────────────────────────────────
+
+step "Verificando porta $PORT"
+
+PORT_PID=$(lsof -ti tcp:"$PORT" 2>/dev/null || true)
+if [ -n "$PORT_PID" ]; then
+    warn "Porta $PORT em uso pelo processo $PORT_PID — encerrando..."
+    kill -TERM "$PORT_PID" 2>/dev/null || true
+    sleep 1
+    # Força se ainda estiver rodando
+    if lsof -ti tcp:"$PORT" > /dev/null 2>&1; then
+        kill -KILL "$PORT_PID" 2>/dev/null || true
+        sleep 1
+    fi
+    ok "Processo anterior encerrado"
+else
+    ok "Porta $PORT disponível"
+fi
+
+# ── 7. Subir o servidor ───────────────────────────────────────────────────────
 
 step "Iniciando servidor uvicorn"
 
