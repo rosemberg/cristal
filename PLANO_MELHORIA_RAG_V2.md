@@ -109,7 +109,7 @@ LIMIT $4
 1. Salvar os registros
 2. Fazer commit e push no GitHub
 
-### 2e. Backfill de Embeddings Existentes
+### ~~2e. Backfill de Embeddings Existentes~~ ✅ CONCLUÍDA
 
 - Script: `scripts/backfill_embeddings.py`
   - Busca todos os chunks/pages/tables sem embedding na tabela `embeddings`
@@ -201,7 +201,7 @@ Implementado como **decorator/wrapper** do `SearchRepository` (mantém mesma int
 | 4 | 2b | EmbeddingGateway port + adapter + cache/circuit breaker | ✅ Concluída |
 | 5a | 2c | Integração na ingestão + EmbeddingRepository | ✅ Concluída |
 | 5b | 2d | Busca semântica no SearchRepository | ✅ Concluída |
-| 6 | 2e | Backfill embeddings existentes | Pendente |
+| 6 | 2e | Backfill embeddings existentes | ✅ Concluída |
 | 7 | 3 | HybridSearch + RRF (sem query expansion LLM) | Pendente |
 
 ## Arquivos Críticos
