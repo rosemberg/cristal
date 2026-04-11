@@ -42,9 +42,9 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <!-- Design system + layout + animações -->
-  <link rel="stylesheet" href="/static/css/style.css?v=12">
-  <link rel="stylesheet" href="/static/css/components.css?v=12">
-  <link rel="stylesheet" href="/static/css/animations.css?v=12">
+  <link rel="stylesheet" href="/static/css/style.css?v=13">
+  <link rel="stylesheet" href="/static/css/components.css?v=13">
+  <link rel="stylesheet" href="/static/css/animations.css?v=13">
 </head>
 <body class="font-sans antialiased">
 
@@ -367,8 +367,10 @@
 </div>
 <!-- /APP SHELL -->
 
-<!-- app.js primeiro (layout shell), depois chat.js (lógica do chat) -->
-<script src="/static/js/app.js?v=12"></script>
-<script src="/static/js/chat.js?v=2"></script>
+<!-- utils.js e api.js carregam primeiro; app.js gerencia shell; chat.js usa ambos -->
+<script src="/static/js/utils.js?v=13"></script>
+<script src="/static/js/api.js?v=13"></script>
+<script src="/static/js/app.js?v=13"></script>
+<script src="/static/js/chat.js?v=13"></script>
 </body>
 </html>

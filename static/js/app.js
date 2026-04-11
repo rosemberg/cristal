@@ -1,4 +1,4 @@
-/* Cristal 2.0 — App Shell (Etapa 12) */
+/* Cristal 2.0 — App Shell (Etapa 13) */
 /* Gerencia: sidebar toggle, docs panel, categorias, nova conversa */
 (function () {
   'use strict';
@@ -113,7 +113,7 @@
     if (!categoriesList) return;
 
     try {
-      var res = await fetch('/api/categories');
+      var res = await API.categories();
       if (!res.ok) throw new Error('HTTP ' + res.status);
       var data = await res.json();
 

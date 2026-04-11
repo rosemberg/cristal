@@ -347,6 +347,131 @@
   color: #006B5F;
 }
 
+/* ===== Feedback bar ===== */
+.feedback-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px 12px;
+  border-top: 1px solid #f3f4f6;
+}
+
+.feedback-label {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-right: 2px;
+  user-select: none;
+}
+
+.feedback-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 8px;
+  background: transparent;
+  color: #9ca3af;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: inherit;
+  flex-shrink: 0;
+}
+.feedback-btn:hover {
+  border-color: #d1d5db;
+  color: #6b7280;
+  background: #f9fafb;
+}
+.feedback-btn:active { transform: scale(0.92); }
+
+/* Estado ativo — positivo */
+.feedback-btn.feedback-active.feedback-positive {
+  background: #ecfdf5;
+  border-color: #6ee7b7;
+  color: #059669;
+}
+/* Estado ativo — negativo */
+.feedback-btn.feedback-active.feedback-negative {
+  background: #fef2f2;
+  border-color: #fca5a5;
+  color: #dc2626;
+}
+
+/* ===== Citações ===== */
+.citation-ref {
+  font-size: 0.7em;
+  color: #00897B;
+  text-decoration: none;
+  padding: 0 2px;
+  border-radius: 3px;
+  transition: background 0.12s;
+  vertical-align: super;
+  line-height: 0;
+}
+.citation-ref:hover {
+  background: #e0f2f1;
+  color: #006B5F;
+}
+
+.citations-section {
+  border-top: 1px solid #f0fdf4;
+  padding-top: 8px;
+  margin-top: 4px;
+}
+
+.citations-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 0 0 4px 0;
+}
+
+.citations-list {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.citation-item {
+  font-size: 11px;
+  color: #6b7280;
+  line-height: 1.6;
+  margin-bottom: 2px;
+}
+
+.citation-link {
+  color: #00897B;
+  text-decoration: underline;
+  text-decoration-color: #b2dfdb;
+  text-underline-offset: 2px;
+  word-break: break-word;
+}
+.citation-link:hover {
+  color: #006B5F;
+  text-decoration-color: #006B5F;
+}
+
+/* ===== Tabela caption ===== */
+.ec-table-caption {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  padding: 6px 10px 4px;
+  margin: 0;
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+/* ===== ec-empty ===== */
+.ec-empty {
+  color: #9ca3af;
+  font-style: italic;
+  font-size: 13px;
+  margin: 0;
+}
+
 /* ===== Error ===== */
 .error-notice {
   display: flex;
