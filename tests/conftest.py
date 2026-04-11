@@ -23,6 +23,7 @@ from app.domain.ports.outbound.document_repository import (
     DocumentRepository,
     ProcessedDocument,
 )
+from app.domain.ports.outbound.document_process_gateway import DocumentProcessGateway
 from app.domain.ports.outbound.llm_gateway import LLMGateway
 from app.domain.ports.outbound.search_repository import SearchRepository
 from app.domain.ports.outbound.session_repository import SessionRepository
@@ -318,6 +319,35 @@ class FakeContentFetchGateway(ContentFetchGateway):
         )
 
 
+class FakeDocumentProcessGateway(DocumentProcessGateway):
+    """Fixed-result document processor for unit tests."""
+
+    def __init__(self, result: ProcessedDocument | None = None) -> None:
+        self._result = result
+
+    async def process(
+        self, url: str, content: bytes, doc_type: str
+    ) -> ProcessedDocument:
+        if self._result is not None:
+            return self._result
+        return ProcessedDocument(
+            document_url=url,
+            text="Conteúdo extraído de teste.",
+            chunks=[
+                DocumentChunk(
+                    id=0,
+                    document_url=url,
+                    chunk_index=0,
+                    text="Conteúdo extraído de teste.",
+                    token_count=5,
+                )
+            ],
+            tables=[],
+            num_pages=1,
+            title=None,
+        )
+
+
 # ---------------------------------------------------------------------------
 # Fixtures that expose fakes
 # ---------------------------------------------------------------------------
@@ -341,6 +371,11 @@ def mock_llm_gateway() -> FakeLLMGateway:
 @pytest.fixture
 def mock_content_fetcher() -> FakeContentFetchGateway:
     return FakeContentFetchGateway()
+
+
+@pytest.fixture
+def fake_document_processor() -> FakeDocumentProcessGateway:
+    return FakeDocumentProcessGateway()
 
 
 @pytest.fixture
