@@ -1,0 +1,24 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: cristal-ingester
+spec:
+  schedule: "30 3 * * 0"  # Domingos às 3h30 (após crawler)
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: ingester
+              image: cristal:latest
+              command:
+                - python
+                - -m
+                - app.adapters.inbound.cli.document_ingester
+                - --run
+              envFrom:
+                - configMapRef:
+                    name: cristal-config
+                - secretRef:
+                    name: cristal-secrets
+          restartPolicy: OnFailure

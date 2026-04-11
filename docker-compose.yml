@@ -22,13 +22,14 @@ services:
     ports:
       - "8080:8080"
     environment:
-      DATABASE_URL: postgresql+asyncpg://cristal:cristal_dev@db:5432/cristal
-      VERTEX_PROJECT_ID: ${VERTEX_PROJECT_ID}
-      VERTEX_LOCATION: ${VERTEX_LOCATION:-us-central1}
-      VERTEX_MODEL: ${VERTEX_MODEL:-gemini-2.0-flash-lite-001}
-      GOOGLE_APPLICATION_CREDENTIALS: /app/credentials.json
-      ALLOWED_ORIGINS: "http://localhost:8080"
-      ENVIRONMENT: development
+      CRISTAL_DATABASE_URL: postgresql+asyncpg://cristal:cristal_dev@db:5432/cristal
+      CRISTAL_VERTEX_PROJECT_ID: ${VERTEX_PROJECT_ID}
+      CRISTAL_VERTEX_LOCATION: ${VERTEX_LOCATION:-us-central1}
+      CRISTAL_VERTEX_MODEL: ${VERTEX_MODEL:-gemini-2.5-flash-lite}
+      CRISTAL_GOOGLE_APPLICATION_CREDENTIALS: /app/credentials.json
+      CRISTAL_ALLOWED_ORIGINS: "http://localhost:8080"
+      CRISTAL_LOG_LEVEL: info
+      CRISTAL_ADMIN_API_KEY: ${ADMIN_API_KEY:-dev-admin-key-change-me}
     volumes:
       - ${GOOGLE_APPLICATION_CREDENTIALS:-./credentials.json}:/app/credentials.json:ro
     depends_on:

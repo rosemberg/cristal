@@ -68,6 +68,16 @@ async def _default_lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
         model_name=settings.vertex_model,
     )
 
+    # Verificar se schema existe (fail-fast antes de servir requests)
+    async with pool.acquire() as conn:
+        tables = await conn.fetchval(
+            "SELECT COUNT(*) FROM information_schema.tables "
+            "WHERE table_schema='public' AND table_name='pages'"
+        )
+        if tables == 0:
+            logger.error("Schema não encontrado. Execute: alembic upgrade head")
+            raise RuntimeError("Database schema not initialized")
+
     app.state.search_repo = search_repo
     app.state.analytics_repo = analytics_repo
 
@@ -133,7 +143,7 @@ def create_app(*, lifespan: Callable[..., Any] | None = None) -> FastAPI:
     app.include_router(analytics_router)
 
     # Frontend estático (se existir)
-    static_dir = Path(__file__).parents[5] / "static"
+    static_dir = Path(__file__).parents[4] / "static"
     if static_dir.is_dir():
         app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 

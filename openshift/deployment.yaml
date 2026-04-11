@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cristal
+  labels:
+    app: cristal
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cristal
+  template:
+    metadata:
+      labels:
+        app: cristal
+    spec:
+      initContainers:
+        - name: db-migrate
+          image: cristal:latest
+          command: ["alembic", "upgrade", "head"]
+          envFrom:
+            - configMapRef:
+                name: cristal-config
+            - secretRef:
+                name: cristal-secrets
+      containers:
+        - name: cristal
+          image: cristal:latest
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: cristal-config
+            - secretRef:
+                name: cristal-secrets
+          volumeMounts:
+            - name: gcp-credentials
+              mountPath: /secrets
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 30
+      volumes:
+        - name: gcp-credentials
+          secret:
+            secretName: gcp-sa-key

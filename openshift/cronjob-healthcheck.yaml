@@ -1,0 +1,24 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: cristal-healthcheck
+spec:
+  schedule: "0 4 * * 0"  # Domingos às 4h (após ingester)
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: healthcheck
+              image: cristal:latest
+              command:
+                - python
+                - -m
+                - app.adapters.inbound.cli.document_ingester
+                - --check
+              envFrom:
+                - configMapRef:
+                    name: cristal-config
+                - secretRef:
+                    name: cristal-secrets
+          restartPolicy: OnFailure
