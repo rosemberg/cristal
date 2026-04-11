@@ -18,6 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from app.adapters.inbound.fastapi.analytics_router import router as analytics_router
 from app.adapters.inbound.fastapi.chat_router import router as chat_router
 from app.adapters.inbound.fastapi.document_router import router as document_router
 from app.adapters.inbound.fastapi.health_router import router as health_router
@@ -64,6 +65,7 @@ async def _default_lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     llm = VertexAIGateway(settings)
 
     app.state.search_repo = search_repo
+    app.state.analytics_repo = analytics_repo
 
     app.state.chat_service = ChatService(
         search_repo=search_repo,
@@ -124,6 +126,7 @@ def create_app(*, lifespan: Callable[..., Any] | None = None) -> FastAPI:
     app.include_router(chat_router)
     app.include_router(document_router)
     app.include_router(session_router)
+    app.include_router(analytics_router)
 
     # Frontend estático (se existir)
     static_dir = Path(__file__).parents[5] / "static"

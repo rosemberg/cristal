@@ -74,6 +74,12 @@
       return fetch('/api/sessions/' + id + '/messages');
     },
 
+    /* GET /api/admin/analytics?days=N */
+    getAnalytics: function (days) {
+      var d = days || 30;
+      return fetch('/api/admin/analytics?days=' + d);
+    },
+
     /* POST /api/feedback — fire-and-forget; falha silenciosa */
     sendFeedback: function (queryId, feedback) {
       fetch('/api/feedback', {

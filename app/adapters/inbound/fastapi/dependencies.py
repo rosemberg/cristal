@@ -12,6 +12,12 @@ from fastapi import Request
 from app.domain.ports.inbound.chat_use_case import ChatUseCase
 from app.domain.ports.inbound.document_use_case import DocumentUseCase
 from app.domain.ports.inbound.session_use_case import SessionUseCase
+from app.domain.ports.outbound.analytics_repository import AnalyticsRepository
+
+
+async def get_analytics_repo(request: Request) -> AnalyticsRepository:
+    """Retorna o AnalyticsRepository registrado no estado da aplicação."""
+    return request.app.state.analytics_repo  # type: ignore[no-any-return]
 
 
 async def get_chat_use_case(request: Request) -> ChatUseCase:

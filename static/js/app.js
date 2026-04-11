@@ -1,5 +1,5 @@
-/* Cristal 2.0 — App Shell (Etapa 14) */
-/* Gerencia: sidebar, docs panel, categorias, navegação chat/mapa, sessões */
+/* Cristal 2.0 — App Shell (Etapa 15) */
+/* Gerencia: sidebar, docs panel, categorias, navegação chat/mapa/analytics, sessões */
 (function () {
   'use strict';
 
@@ -15,9 +15,10 @@
   var newChatBtn     = document.getElementById('new-chat-btn');
   var categoriesList = document.getElementById('categories-list');
   var mapBtn         = document.getElementById('map-btn');
+  var adminBtn       = document.getElementById('admin-btn');
 
   // ===== Estado de navegação =====
-  var _currentView = 'chat'; // 'chat' | 'map'
+  var _currentView = 'chat'; // 'chat' | 'map' | 'analytics'
 
   // ===== Sidebar =====
 
@@ -59,31 +60,46 @@
   function navigate(view) {
     _currentView = view;
 
-    var chatArea   = document.getElementById('messages-area');
-    var inputArea  = document.querySelector('.input-area-wrapper');
-    var chatTopbar = document.querySelector('.chat-topbar');
-    var mapView    = document.getElementById('map-view');
+    var chatArea      = document.getElementById('messages-area');
+    var inputArea     = document.querySelector('.input-area-wrapper');
+    var chatTopbar    = document.querySelector('.chat-topbar');
+    var mapView       = document.getElementById('map-view');
+    var analyticsView = document.getElementById('analytics-view');
+
+    // Reset todas as views
+    if (chatArea)      chatArea.style.display      = 'none';
+    if (inputArea)     inputArea.style.display     = 'none';
+    if (chatTopbar)    chatTopbar.style.display    = 'none';
+    if (mapView)       mapView.setAttribute('hidden', '');
+    if (analyticsView) analyticsView.setAttribute('hidden', '');
+    if (mapBtn)        mapBtn.classList.remove('nav-btn--active');
+    if (adminBtn)      adminBtn.classList.remove('nav-btn--active');
 
     if (view === 'map') {
-      if (chatArea)   chatArea.style.display   = 'none';
-      if (inputArea)  inputArea.style.display  = 'none';
-      if (chatTopbar) chatTopbar.style.display = 'none';
-      if (mapView)    { mapView.style.display = ''; mapView.removeAttribute('hidden'); }
-      if (mapBtn)     mapBtn.classList.add('nav-btn--active');
-      // Carrega o mapa se ainda não carregado
+      if (mapView) { mapView.style.display = ''; mapView.removeAttribute('hidden'); }
+      if (mapBtn)  mapBtn.classList.add('nav-btn--active');
       if (window.Map) window.Map.load();
+    } else if (view === 'analytics') {
+      if (analyticsView) { analyticsView.style.display = ''; analyticsView.removeAttribute('hidden'); }
+      if (adminBtn)      adminBtn.classList.add('nav-btn--active');
+      if (window.Analytics) window.Analytics.load();
     } else {
+      // chat (default)
       if (chatArea)   chatArea.style.display   = '';
       if (inputArea)  inputArea.style.display  = '';
       if (chatTopbar) chatTopbar.style.display = '';
-      if (mapView)    mapView.setAttribute('hidden', '');
-      if (mapBtn)     mapBtn.classList.remove('nav-btn--active');
     }
   }
 
   if (mapBtn) {
     mapBtn.addEventListener('click', function () {
       navigate(_currentView === 'map' ? 'chat' : 'map');
+    });
+  }
+
+  if (adminBtn) {
+    adminBtn.addEventListener('click', function () {
+      navigate(_currentView === 'analytics' ? 'chat' : 'analytics');
     });
   }
 
@@ -217,7 +233,7 @@
       closeSidebar();
     } else if (docsPanel && !docsPanel.hasAttribute('hidden')) {
       closeDocsPanel();
-    } else if (_currentView === 'map') {
+    } else if (_currentView === 'map' || _currentView === 'analytics') {
       navigate('chat');
     }
   });

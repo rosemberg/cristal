@@ -132,6 +132,31 @@ class MessagesResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Analytics (Admin)
+# ---------------------------------------------------------------------------
+
+
+class DailyStatItem(BaseModel):
+    date: str
+    query_count: int
+    avg_response_time_ms: float
+
+
+class MetricsOut(BaseModel):
+    total_queries: int
+    avg_response_time_ms: float
+    positive_feedback: int
+    negative_feedback: int
+    satisfaction_rate: float
+
+
+class AnalyticsResponse(BaseModel):
+    metrics: MetricsOut
+    daily_stats: list[DailyStatItem]
+    days: int
+
+
+# ---------------------------------------------------------------------------
 # Health
 # ---------------------------------------------------------------------------
 
