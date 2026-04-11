@@ -214,6 +214,19 @@ class FakeDocumentRepository(DocumentRepository):
     async def count_tables(self) -> int:
         return sum(len(d.tables) for d in self._docs.values())
 
+    async def list_done(self):
+        from app.domain.ports.outbound.document_repository import DocumentCheckInfo
+        return [
+            DocumentCheckInfo(
+                url=d.document_url,
+                title=d.title,
+                page_url=d.page_url,
+                stored_content_length=None,
+            )
+            for d in self._docs.values()
+            if d.is_processed
+        ]
+
 
 class FakeSessionRepository(SessionRepository):
     """In-memory session repository for unit tests."""

@@ -51,6 +51,23 @@ class CrawledPage:
     last_modified: datetime | None = None
 
 
+@dataclass
+class PageCheckInfo:
+    """Informação mínima de uma página para verificação de saúde."""
+
+    url: str
+    title: str
+
+
+@dataclass
+class LinkCheckInfo:
+    """Informação mínima de um link para verificação de saúde."""
+
+    url: str
+    title: str
+    parent_page_url: str
+
+
 class PageRepository(ABC):
     """Port para persistir e consultar páginas crawleadas."""
 
@@ -65,4 +82,14 @@ class PageRepository(ABC):
     @abstractmethod
     async def count_pages(self) -> int:
         """Retorna o total de páginas no banco."""
+        ...
+
+    @abstractmethod
+    async def list_all_urls(self) -> list[PageCheckInfo]:
+        """Retorna URL e título de todas as páginas (para health check)."""
+        ...
+
+    @abstractmethod
+    async def list_all_links(self) -> list[LinkCheckInfo]:
+        """Retorna todos os links de page_links com URL, título e página-mãe."""
         ...

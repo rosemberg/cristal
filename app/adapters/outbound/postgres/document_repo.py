@@ -13,7 +13,11 @@ import asyncpg
 from app.domain.entities.chunk import DocumentChunk
 from app.domain.entities.document import Document
 from app.domain.entities.document_table import DocumentTable
-from app.domain.ports.outbound.document_repository import DocumentRepository, ProcessedDocument
+from app.domain.ports.outbound.document_repository import (
+    DocumentCheckInfo,
+    DocumentRepository,
+    ProcessedDocument,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -304,6 +308,29 @@ class PostgresDocumentRepository(DocumentRepository):
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow("SELECT COUNT(*) AS total FROM document_tables")
         return row["total"] if row else 0
+
+    async def list_done(self) -> list[DocumentCheckInfo]:
+        """Retorna documentos com processing_status='done' para health check."""
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT d.document_url,
+                       d.document_title,
+                       d.page_url
+                FROM documents d
+                WHERE d.processing_status = 'done'
+                ORDER BY d.document_url
+                """
+            )
+        return [
+            DocumentCheckInfo(
+                url=r["document_url"],
+                title=r["document_title"],
+                page_url=r["page_url"],
+                stored_content_length=None,
+            )
+            for r in rows
+        ]
 
     async def save_content(self, document_url: str, content: ProcessedDocument) -> None:
         async with self._pool.acquire() as conn:

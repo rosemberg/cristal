@@ -39,5 +39,6 @@ class HealthCheckReport:
     issues_found: int
     new_inconsistencies: int
     updated_inconsistencies: int
+    auto_resolved: int
     duration_seconds: float
     by_type: dict[str, int]  # contagem por inconsistency_type

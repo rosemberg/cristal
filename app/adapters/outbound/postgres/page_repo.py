@@ -11,7 +11,12 @@ import logging
 
 import asyncpg
 
-from app.domain.ports.outbound.page_repository import CrawledPage, PageRepository
+from app.domain.ports.outbound.page_repository import (
+    CrawledPage,
+    LinkCheckInfo,
+    PageCheckInfo,
+    PageRepository,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -141,3 +146,30 @@ class PostgresPageRepository(PageRepository):
         async with self._pool.acquire() as conn:
             result: int | None = await conn.fetchval("SELECT COUNT(*) FROM pages")
         return result or 0
+
+    async def list_all_urls(self) -> list[PageCheckInfo]:
+        """Retorna URL e título de todas as páginas para health check."""
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                "SELECT url, title FROM pages ORDER BY url"
+            )
+        return [PageCheckInfo(url=r["url"], title=r["title"] or "") for r in rows]
+
+    async def list_all_links(self) -> list[LinkCheckInfo]:
+        """Retorna todos os links de page_links para health check."""
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT target_url, link_title, source_url
+                FROM page_links
+                ORDER BY target_url
+                """
+            )
+        return [
+            LinkCheckInfo(
+                url=r["target_url"],
+                title=r["link_title"] or "",
+                parent_page_url=r["source_url"],
+            )
+            for r in rows
+        ]

@@ -134,6 +134,7 @@ class TestHealthCheckReport:
             issues_found=10,
             new_inconsistencies=7,
             updated_inconsistencies=3,
+            auto_resolved=2,
             duration_seconds=45.2,
             by_type={"broken_link": 5, "page_not_accessible": 3, "empty_content": 2},
         )
@@ -147,6 +148,7 @@ class TestHealthCheckReport:
         assert report.issues_found == 10
         assert report.new_inconsistencies == 7
         assert report.updated_inconsistencies == 3
+        assert report.auto_resolved == 2
         assert report.duration_seconds == 45.2
         assert report.by_type["broken_link"] == 5
 

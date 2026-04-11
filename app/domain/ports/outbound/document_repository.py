@@ -11,6 +11,16 @@ from app.domain.entities.document_table import DocumentTable
 
 
 @dataclass
+class DocumentCheckInfo:
+    """Informação mínima de um documento concluído para verificação de saúde."""
+
+    url: str
+    title: str | None
+    page_url: str
+    stored_content_length: int | None
+
+
+@dataclass
 class ProcessedDocument:
     """Value object produced by the document processor (Etapa 7)."""
 
@@ -72,3 +82,7 @@ class DocumentRepository(ABC):
 
     @abstractmethod
     async def count_tables(self) -> int: ...
+
+    @abstractmethod
+    async def list_done(self) -> list[DocumentCheckInfo]: ...
+    # Retorna documentos com processing_status='done' para health check
