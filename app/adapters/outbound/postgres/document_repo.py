@@ -17,6 +17,8 @@ from app.domain.ports.outbound.document_repository import DocumentRepository, Pr
 
 logger = logging.getLogger(__name__)
 
+_VALID_STATUSES = frozenset({"pending", "processing", "done", "error"})
+
 
 def _parse_jsonb(value: object) -> list:  # type: ignore[type-arg]
     """Normaliza valor JSONB: asyncpg pode retornar string ou lista nativa."""
@@ -35,7 +37,7 @@ def _record_to_document(row: asyncpg.Record) -> Document:
         type=row["document_type"] or "pdf",
         is_processed=row["processing_status"] == "done",
         title=row["document_title"],
-        num_pages=row["num_pages"],
+        num_pages=row.get("num_pages"),
     )
 
 
@@ -151,6 +153,136 @@ class PostgresDocumentRepository(DocumentRepository):
             )
             for r in rows
         ]
+
+    async def list_pending(self, limit: int = 50) -> list[Document]:
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT d.id,
+                       d.page_url,
+                       d.document_url,
+                       d.document_type,
+                       d.document_title,
+                       d.processing_status,
+                       dc.num_pages
+                FROM documents d
+                LEFT JOIN document_contents dc ON dc.document_url = d.document_url
+                WHERE d.processing_status = 'pending'
+                ORDER BY d.created_at ASC
+                LIMIT $1
+                """,
+                limit,
+            )
+        return [_record_to_document(r) for r in rows]
+
+    async def list_errors(self) -> list[Document]:
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT d.id,
+                       d.page_url,
+                       d.document_url,
+                       d.document_type,
+                       d.document_title,
+                       d.processing_status,
+                       dc.num_pages
+                FROM documents d
+                LEFT JOIN document_contents dc ON dc.document_url = d.document_url
+                WHERE d.processing_status = 'error'
+                ORDER BY d.created_at ASC
+                """,
+            )
+        return [_record_to_document(r) for r in rows]
+
+    async def update_status(
+        self, document_url: str, status: str, error: str | None = None
+    ) -> None:
+        if status not in _VALID_STATUSES:
+            raise ValueError(
+                f"Status inválido: {status!r}. Valores aceitos: {sorted(_VALID_STATUSES)}"
+            )
+        async with self._pool.acquire() as conn:
+            await conn.execute(
+                """
+                UPDATE documents
+                SET processing_status = $2,
+                    processing_error  = $3,
+                    processed_at      = NOW()
+                WHERE document_url = $1
+                """,
+                document_url,
+                status,
+                error,
+            )
+
+    async def save_content_atomic(
+        self, document_url: str, content: ProcessedDocument
+    ) -> None:
+        async with self._pool.acquire() as conn:
+            async with conn.transaction():
+                # Limpa conteúdo anterior
+                await conn.execute(
+                    "DELETE FROM document_chunks WHERE document_url = $1", document_url
+                )
+                await conn.execute(
+                    "DELETE FROM document_tables WHERE document_url = $1", document_url
+                )
+                await conn.execute(
+                    "DELETE FROM document_contents WHERE document_url = $1", document_url
+                )
+                # Insere conteúdo
+                await conn.execute(
+                    """
+                    INSERT INTO document_contents
+                        (document_url, document_title, full_text, num_pages, processing_status)
+                    VALUES ($1, $2, $3, $4, 'done')
+                    """,
+                    document_url,
+                    content.title,
+                    content.text,
+                    content.num_pages,
+                )
+                if content.chunks:
+                    await conn.executemany(
+                        """
+                        INSERT INTO document_chunks
+                            (document_url, chunk_index, chunk_text,
+                             section_title, page_number, token_count)
+                        VALUES ($1, $2, $3, $4, $5, $6)
+                        """,
+                        [
+                            (
+                                document_url,
+                                c.chunk_index,
+                                c.text,
+                                c.section_title,
+                                c.page_number,
+                                c.token_count,
+                            )
+                            for c in content.chunks
+                        ],
+                    )
+                if content.tables:
+                    await conn.executemany(
+                        """
+                        INSERT INTO document_tables
+                            (document_url, table_index, headers, rows,
+                             caption, num_rows, num_cols)
+                        VALUES ($1, $2, $3::jsonb, $4::jsonb, $5, $6, $7)
+                        """,
+                        [
+                            (
+                                document_url,
+                                t.table_index,
+                                json.dumps(t.headers),
+                                json.dumps(t.rows),
+                                t.caption,
+                                t.num_rows,
+                                t.num_cols,
+                            )
+                            for t in content.tables
+                        ],
+                    )
 
     async def save_content(self, document_url: str, content: ProcessedDocument) -> None:
         async with self._pool.acquire() as conn:

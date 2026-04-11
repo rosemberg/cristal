@@ -188,6 +188,22 @@ class FakeDocumentRepository(DocumentRepository):
             self._docs[document_url].tables = content.tables
             self._docs[document_url].is_processed = True
 
+    async def list_pending(self, limit: int = 50) -> list[Document]:
+        return [d for d in self._docs.values() if not d.is_processed][:limit]
+
+    async def list_errors(self) -> list[Document]:
+        return []
+
+    async def update_status(
+        self, document_url: str, status: str, error: str | None = None
+    ) -> None:
+        pass
+
+    async def save_content_atomic(
+        self, document_url: str, content: ProcessedDocument
+    ) -> None:
+        await self.save_content(document_url, content)
+
 
 class FakeSessionRepository(SessionRepository):
     """In-memory session repository for unit tests."""

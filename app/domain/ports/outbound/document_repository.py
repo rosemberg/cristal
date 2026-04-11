@@ -45,3 +45,20 @@ class DocumentRepository(ABC):
     async def save_content(
         self, document_url: str, content: ProcessedDocument
     ) -> None: ...
+
+    @abstractmethod
+    async def list_pending(self, limit: int = 50) -> list[Document]: ...
+
+    @abstractmethod
+    async def list_errors(self) -> list[Document]: ...
+
+    @abstractmethod
+    async def update_status(
+        self, document_url: str, status: str, error: str | None = None
+    ) -> None: ...
+
+    @abstractmethod
+    async def save_content_atomic(
+        self, document_url: str, content: ProcessedDocument
+    ) -> None: ...
+    # Salva chunks e tabelas em transação única — rollback em caso de falha
