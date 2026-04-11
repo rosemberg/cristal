@@ -28,8 +28,9 @@
 
   // ===== Estado =====
   var state = {
-    history: [],
+    history:   [],
     isLoading: false,
+    sessionId: null,
   };
 
   // Expõe para app.js (botão Nova Conversa)
@@ -83,6 +84,43 @@
     inputField.style.height = Math.min(inputField.scrollHeight, 120) + 'px';
   }
 
+  // ===== Carregar histórico de sessão =====
+  function loadHistory(messages, sessionId) {
+    state.sessionId = sessionId || null;
+    state.history   = [];
+
+    // Limpa mensagens existentes (exceto boas-vindas)
+    Array.from(messagesArea.children).forEach(function (child) {
+      if (child.id !== 'welcome-message') child.remove();
+    });
+
+    // Renderiza mensagens
+    messages.forEach(function (m) {
+      if (m.role === 'user') {
+        appendUserMessage(m.content);
+        state.history.push({ role: 'user', content: m.content });
+      } else if (m.role === 'assistant') {
+        // Constrói data compatível com buildBotCard
+        var data = {
+          text:    m.content,
+          links:   [],
+          sources: m.sources || [],
+          tables:  m.tables  || [],
+        };
+        appendBotMessage(data);
+        state.history.push({ role: 'assistant', content: m.content });
+      }
+    });
+
+    scrollToBottom();
+  }
+
+  // ===== Envio com contexto de documento =====
+  function sendWithContext(docTitle) {
+    var text = 'Fale mais sobre o documento: ' + docTitle;
+    if (!state.isLoading) sendMessage(text);
+  }
+
   // ===== Envio de mensagem =====
   async function sendMessage(text) {
     state.isLoading = true;
@@ -90,11 +128,16 @@
     inputField.value = '';
     inputField.style.height = 'auto';
 
+    // Garante sessão antes do primeiro envio
+    if (!state.sessionId && window.Sessions) {
+      state.sessionId = await window.Sessions.ensureSession();
+    }
+
     appendUserMessage(text);
     var typingId = appendTypingIndicator();
 
     try {
-      var res = await API.chat(text, state.history);
+      var res = await API.chat(text, state.history, state.sessionId);
       removeMessage(typingId);
 
       if (!res.ok) {
@@ -111,6 +154,9 @@
       state.history.push({ role: 'user',      content: text });
       state.history.push({ role: 'assistant', content: data.text || '' });
       if (state.history.length > 12) state.history = state.history.slice(-12);
+
+      // Atualiza lista de sessões na sidebar após cada mensagem
+      if (window.Sessions) window.Sessions.refreshList();
 
     } catch (_) {
       removeMessage(typingId);
@@ -394,6 +440,12 @@
     });
     return btn;
   }
+
+  // ===== API Pública =====
+  window.Chat = {
+    loadHistory:     loadHistory,
+    sendWithContext: sendWithContext,
+  };
 
   // ===== Bootstrap =====
   document.addEventListener('DOMContentLoaded', init);

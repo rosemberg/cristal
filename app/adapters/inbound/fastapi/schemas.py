@@ -45,6 +45,25 @@ class SuggestResponse(BaseModel):
     suggestions: list[str]
 
 
+class CategoryItem(BaseModel):
+    name: str
+    page_count: int = 0
+
+
+class CategoriesResponse(BaseModel):
+    categories: list[CategoryItem]
+
+
+class TransparencyMapItem(BaseModel):
+    category: str
+    page_count: int = 0
+
+
+class TransparencyMapResponse(BaseModel):
+    categories: list[TransparencyMapItem]
+    totals: dict[str, object]
+
+
 # ---------------------------------------------------------------------------
 # Documents
 # ---------------------------------------------------------------------------
@@ -95,6 +114,10 @@ class SessionOut(BaseModel):
     created_at: datetime
     last_active: datetime
     title: str | None = None
+
+
+class SessionListResponse(BaseModel):
+    sessions: list[SessionOut]
 
 
 class MessageOut(BaseModel):

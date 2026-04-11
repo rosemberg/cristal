@@ -18,3 +18,6 @@ class SessionUseCase(ABC):
 
     @abstractmethod
     async def list_messages(self, session_id: UUID) -> list[ChatMessage]: ...
+
+    @abstractmethod
+    async def list_sessions(self, limit: int = 20) -> list[ChatSession]: ...

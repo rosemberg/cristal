@@ -12,12 +12,33 @@ from app.adapters.inbound.fastapi.schemas import (
     MessageOut,
     MessagesResponse,
     SessionCreateRequest,
+    SessionListResponse,
     SessionOut,
     TableDataOut,
 )
 from app.domain.ports.inbound.session_use_case import SessionUseCase
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
+
+
+@router.get("", response_model=SessionListResponse)
+async def list_sessions(
+    limit: int = 20,
+    session_uc: SessionUseCase = Depends(get_session_use_case),
+) -> SessionListResponse:
+    """Lista as sessões mais recentes."""
+    sessions = await session_uc.list_sessions(limit=limit)
+    return SessionListResponse(
+        sessions=[
+            SessionOut(
+                id=s.id,
+                created_at=s.created_at,
+                last_active=s.last_active,
+                title=s.title,
+            )
+            for s in sessions
+        ]
+    )
 
 
 @router.post("", response_model=SessionOut, status_code=201)

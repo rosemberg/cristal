@@ -1,16 +1,20 @@
-"""Router: Chat — POST /api/chat, GET /api/suggest."""
+"""Router: Chat — POST /api/chat, GET /api/suggest, GET /api/categories, GET /api/transparency-map."""
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 
 from app.adapters.inbound.fastapi.dependencies import get_chat_use_case
 from app.adapters.inbound.fastapi.schemas import (
+    CategoriesResponse,
+    CategoryItem,
     ChatRequest,
     ChatResponse,
     CitationOut,
     SuggestResponse,
     TableDataOut,
+    TransparencyMapItem,
+    TransparencyMapResponse,
 )
 from app.domain.ports.inbound.chat_use_case import ChatUseCase
 
@@ -60,3 +64,42 @@ async def get_suggest(
     """Retorna sugestões de perguntas iniciais."""
     suggestions = await chat_uc.get_suggestions()
     return SuggestResponse(suggestions=suggestions)
+
+
+@router.get("/categories", response_model=CategoriesResponse)
+async def get_categories(request: Request) -> CategoriesResponse:
+    """Lista categorias do portal de transparência com contagem de páginas."""
+    search_repo = getattr(request.app.state, "search_repo", None)
+    if search_repo is None:
+        return CategoriesResponse(categories=[])
+    try:
+        cats = await search_repo.get_categories()
+        return CategoriesResponse(
+            categories=[
+                CategoryItem(name=c["name"], page_count=int(c.get("count", 0)))  # type: ignore[arg-type]
+                for c in cats
+            ]
+        )
+    except Exception:  # noqa: BLE001
+        return CategoriesResponse(categories=[])
+
+
+@router.get("/transparency-map", response_model=TransparencyMapResponse)
+async def get_transparency_map(request: Request) -> TransparencyMapResponse:
+    """Retorna o mapa de transparência: categorias com contagem de páginas e documentos."""
+    search_repo = getattr(request.app.state, "search_repo", None)
+    if search_repo is None:
+        return TransparencyMapResponse(categories=[], totals={})
+    try:
+        cats = await search_repo.get_categories()
+        stats = await search_repo.get_stats()
+        items = [
+            TransparencyMapItem(
+                category=c["name"],  # type: ignore[arg-type]
+                page_count=int(c.get("count", 0)),  # type: ignore[arg-type]
+            )
+            for c in cats
+        ]
+        return TransparencyMapResponse(categories=items, totals=stats)
+    except Exception:  # noqa: BLE001
+        return TransparencyMapResponse(categories=[], totals={})

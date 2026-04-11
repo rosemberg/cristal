@@ -51,6 +51,9 @@ class _FakeSessionUseCase(SessionUseCase):
             return []
         return list(session.messages)
 
+    async def list_sessions(self, limit: int = 20) -> list[ChatSession]:
+        return sorted(self._sessions.values(), key=lambda s: s.last_active, reverse=True)[:limit]
+
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -180,3 +183,29 @@ async def test_list_messages_unknown_session_returns_empty(
     assert resp.status_code == 200
     data = resp.json()
     assert data["messages"] == []
+
+
+# ---------------------------------------------------------------------------
+# Tests — GET /api/sessions (list)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_list_sessions_empty(client: AsyncClient) -> None:
+    resp = await client.get("/api/sessions")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "sessions" in data
+    assert data["sessions"] == []
+
+
+@pytest.mark.asyncio
+async def test_list_sessions_returns_created(
+    client: AsyncClient, fake_session_uc: _FakeSessionUseCase
+) -> None:
+    await fake_session_uc.create(title="Conversa sobre licitações")
+    resp = await client.get("/api/sessions")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert len(data["sessions"]) == 1
+    assert data["sessions"][0]["title"] == "Conversa sobre licitações"

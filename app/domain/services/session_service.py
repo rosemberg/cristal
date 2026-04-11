@@ -27,3 +27,6 @@ class SessionService(SessionUseCase):
         if session is None:
             return []
         return list(session.messages)
+
+    async def list_sessions(self, limit: int = 20) -> list[ChatSession]:
+        return await self._repo.list_sessions(limit=limit)

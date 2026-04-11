@@ -1,5 +1,5 @@
-/* Cristal 2.0 — App Shell (Etapa 13) */
-/* Gerencia: sidebar toggle, docs panel, categorias, nova conversa */
+/* Cristal 2.0 — App Shell (Etapa 14) */
+/* Gerencia: sidebar, docs panel, categorias, navegação chat/mapa, sessões */
 (function () {
   'use strict';
 
@@ -14,6 +14,10 @@
   var docsPanelBody  = document.getElementById('docs-panel-body');
   var newChatBtn     = document.getElementById('new-chat-btn');
   var categoriesList = document.getElementById('categories-list');
+  var mapBtn         = document.getElementById('map-btn');
+
+  // ===== Estado de navegação =====
+  var _currentView = 'chat'; // 'chat' | 'map'
 
   // ===== Sidebar =====
 
@@ -46,26 +50,57 @@
   if (sidebarClose)   sidebarClose.addEventListener('click', closeSidebar);
   if (sidebarOverlay) sidebarOverlay.addEventListener('click', closeSidebar);
 
-  // Fechar sidebar ao redimensionar para desktop
   window.addEventListener('resize', function () {
     if (!isMobile()) closeSidebar();
   });
+
+  // ===== Navegação de views =====
+
+  function navigate(view) {
+    _currentView = view;
+
+    var chatArea   = document.getElementById('messages-area');
+    var inputArea  = document.querySelector('.input-area-wrapper');
+    var chatTopbar = document.querySelector('.chat-topbar');
+    var mapView    = document.getElementById('map-view');
+
+    if (view === 'map') {
+      if (chatArea)   chatArea.style.display   = 'none';
+      if (inputArea)  inputArea.style.display  = 'none';
+      if (chatTopbar) chatTopbar.style.display = 'none';
+      if (mapView)    { mapView.style.display = ''; mapView.removeAttribute('hidden'); }
+      if (mapBtn)     mapBtn.classList.add('nav-btn--active');
+      // Carrega o mapa se ainda não carregado
+      if (window.Map) window.Map.load();
+    } else {
+      if (chatArea)   chatArea.style.display   = '';
+      if (inputArea)  inputArea.style.display  = '';
+      if (chatTopbar) chatTopbar.style.display = '';
+      if (mapView)    mapView.setAttribute('hidden', '');
+      if (mapBtn)     mapBtn.classList.remove('nav-btn--active');
+    }
+  }
+
+  if (mapBtn) {
+    mapBtn.addEventListener('click', function () {
+      navigate(_currentView === 'map' ? 'chat' : 'map');
+    });
+  }
 
   // ===== Docs Panel =====
 
   function openDocsPanel(doc) {
     if (!docsPanel) return;
-
-    // Atualiza título
     if (docsPanelTitle) {
       docsPanelTitle.textContent = (doc && doc.title) ? doc.title : 'Documento';
     }
-
-    // Atualiza corpo (Etapa 14 irá popular com conteúdo real)
-    if (docsPanelBody && doc && doc.html) {
-      docsPanelBody.innerHTML = doc.html;
+    if (docsPanelBody && doc) {
+      if (doc.url && window.Documents) {
+        window.Documents.openMeta(doc.url, doc);
+      } else if (doc.html) {
+        docsPanelBody.innerHTML = doc.html;
+      }
     }
-
     docsPanel.removeAttribute('hidden');
   }
 
@@ -80,10 +115,10 @@
   // ===== Nova Conversa =====
 
   if (newChatBtn) {
-    newChatBtn.addEventListener('click', function () {
+    newChatBtn.addEventListener('click', async function () {
       closeSidebar();
+      navigate('chat');
 
-      // Remove todas as mensagens exceto a de boas-vindas
       var messagesArea = document.getElementById('messages-area');
       if (messagesArea) {
         Array.from(messagesArea.children).forEach(function (child) {
@@ -91,13 +126,18 @@
         });
       }
 
-      // Reseta estado do chat (compatível com chat.js)
-      if (window._chatState) {
-        window._chatState.history  = [];
-        window._chatState.isLoading = false;
+      // Cria nova sessão
+      if (window.Sessions) {
+        var session = await window.Sessions.createSession();
+        if (session) window.Sessions.refreshList();
       }
 
-      // Foca no campo de input
+      if (window._chatState) {
+        window._chatState.history   = [];
+        window._chatState.isLoading = false;
+        window._chatState.sessionId = window.Sessions ? window.Sessions.getCurrentId() : null;
+      }
+
       var inputField = document.getElementById('input-field');
       if (inputField) {
         inputField.value = '';
@@ -116,8 +156,9 @@
       var res = await API.categories();
       if (!res.ok) throw new Error('HTTP ' + res.status);
       var data = await res.json();
+      var cats = data.categories || [];
 
-      if (!data.categories || data.categories.length === 0) {
+      if (cats.length === 0) {
         categoriesList.innerHTML =
           '<li><p class="sidebar-empty-state">Nenhuma categoria disponível.</p></li>';
         return;
@@ -125,7 +166,7 @@
 
       categoriesList.innerHTML = '';
 
-      data.categories.forEach(function (cat) {
+      cats.forEach(function (cat) {
         var name = cat.name || cat.category || '';
         if (!name) return;
 
@@ -150,6 +191,7 @@
 
         btn.addEventListener('click', function () {
           closeSidebar();
+          navigate('chat');
           var inputField = document.getElementById('input-field');
           if (inputField) {
             inputField.value = 'O que posso encontrar em ' + name + '?';
@@ -175,6 +217,8 @@
       closeSidebar();
     } else if (docsPanel && !docsPanel.hasAttribute('hidden')) {
       closeDocsPanel();
+    } else if (_currentView === 'map') {
+      navigate('chat');
     }
   });
 
@@ -184,9 +228,11 @@
     closeDocsPanel: closeDocsPanel,
     openSidebar:    openSidebar,
     closeSidebar:   closeSidebar,
+    navigate:       navigate,
   };
 
   // ===== Init =====
   loadCategories();
+  if (window.Sessions) window.Sessions.init();
 
 })();
