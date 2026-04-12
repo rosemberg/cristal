@@ -59,7 +59,7 @@ async def _default_lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     from app.adapters.outbound.postgres.connection import get_pool
     pool = get_pool(db)
 
-    search_repo = PostgresSearchRepository(pool)
+    search_repo = PostgresSearchRepository(pool, embedding_model_name=settings.vertex_embedding_model)
     document_repo = PostgresDocumentRepository(pool)
     session_repo = PostgresSessionRepository(pool)
     analytics_repo = PostgresAnalyticsRepository(pool)
@@ -87,7 +87,7 @@ async def _default_lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
         from app.adapters.outbound.vertex_ai.embedding_gateway import VertexEmbeddingGateway
         embedding_gateway = VertexEmbeddingGateway(
             project_id=settings.vertex_project_id,
-            location=settings.vertex_location,
+            location=settings.vertex_embedding_location,
             model_name=settings.vertex_embedding_model,
             output_dimensionality=settings.embedding_dimensions,
             cache_max_size=settings.embedding_cache_max_size,
@@ -109,12 +109,52 @@ async def _default_lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     )
     app.state.hybrid_search = hybrid_search
 
-    app.state.chat_service = ChatService(
-        search_repo=hybrid_search,
-        session_repo=session_repo,
-        analytics_repo=analytics_repo,
-        llm=llm,
-    )
+    if settings.use_multi_agent:
+        from app.adapters.outbound.vertex_ai.function_calling_gateway import (
+            VertexAIFunctionCallingGateway,
+        )
+        from app.domain.services.circuit_breaker import CircuitBreaker
+        from app.domain.services.data_agent import DataAgent
+        from app.domain.services.multi_agent_chat_service import MultiAgentChatService
+        from app.domain.services.response_assembler import ResponseAssembler
+        from app.domain.services.tool_executor import ToolExecutor
+        from app.domain.services.writer_agent import WriterAgent
+
+        data_llm = VertexAIFunctionCallingGateway(
+            project_id=settings.vertex_project_id,
+            location=settings.vertex_location,
+            model_name=settings.data_agent_model,
+        )
+        writer_llm = VertexAIGateway(
+            project_id=settings.vertex_project_id,
+            location=settings.vertex_location,
+            model_name=settings.writer_agent_model,
+        )
+        tool_executor = ToolExecutor()
+        data_agent = DataAgent(
+            llm=data_llm,
+            tool_executor=tool_executor,
+            max_tool_rounds=settings.data_agent_max_tool_rounds,
+        )
+        writer_agent = WriterAgent(llm=writer_llm)
+        assembler = ResponseAssembler()
+
+        app.state.chat_service = MultiAgentChatService(
+            search_repo=hybrid_search,
+            session_repo=session_repo,
+            analytics_repo=analytics_repo,
+            data_agent=data_agent,
+            writer_agent=writer_agent,
+            assembler=assembler,
+        )
+        logger.info("Modo multi-agente ativado (DataAgent: %s)", settings.data_agent_model)
+    else:
+        app.state.chat_service = ChatService(
+            search_repo=hybrid_search,
+            session_repo=session_repo,
+            analytics_repo=analytics_repo,
+            llm=llm,
+        )
     app.state.document_service = DocumentService(document_repo=document_repo)
     app.state.session_service = SessionService(session_repo=session_repo)
 

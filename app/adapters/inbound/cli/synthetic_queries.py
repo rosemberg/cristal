@@ -104,7 +104,7 @@ async def _build_service_async() -> tuple[SyntheticQueriesCLI, object]:
     from app.adapters.outbound.postgres.synthetic_query_repo import (
         PostgresSyntheticQueryRepository,
     )
-    from app.adapters.outbound.vertex_ai.embedding_gateway import VertexAIEmbeddingGateway
+    from app.adapters.outbound.vertex_ai.embedding_gateway import VertexEmbeddingGateway
     from app.adapters.outbound.vertex_ai.gateway import VertexAIGateway
     from app.config.settings import get_settings
 
@@ -119,9 +119,9 @@ async def _build_service_async() -> tuple[SyntheticQueriesCLI, object]:
         location=settings.vertex_location,
         model_name=settings.vertex_model,
     )
-    embedding_gw = VertexAIEmbeddingGateway(
+    embedding_gw = VertexEmbeddingGateway(
         project_id=settings.vertex_project_id,
-        location=settings.vertex_location,
+        location=settings.vertex_embedding_location,
         model_name=settings.vertex_embedding_model,
         output_dimensionality=settings.embedding_dimensions,
     )
@@ -194,8 +194,17 @@ def main() -> None:
         metavar="N",
         help="Chunks processados por execução (padrão: 50)",
     )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Exibe logs detalhados (DEBUG)",
+    )
 
     args = parser.parse_args()
+
+    if args.verbose:
+        logging.getLogger().setLevel(logging.DEBUG)
+        logging.getLogger("app").setLevel(logging.DEBUG)
 
     if args.regenerate and (args.source_type is None or args.source_id is None):
         parser.error("--regenerate requer --source-type e --source-id")

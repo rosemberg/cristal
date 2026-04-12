@@ -261,7 +261,7 @@ async def run(batch_size: int, source_types: list[str], dry_run: bool) -> None:
     # Inicializa gateway
     gateway = VertexEmbeddingGateway(
         project_id=settings.vertex_project_id,
-        location=settings.vertex_location,
+        location=settings.vertex_embedding_location,
         model_name=model_name,
         output_dimensionality=settings.embedding_dimensions,
         max_batch_size=batch_size,

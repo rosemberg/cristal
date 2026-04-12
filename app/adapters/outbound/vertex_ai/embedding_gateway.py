@@ -100,8 +100,8 @@ class VertexEmbeddingGateway(EmbeddingGateway):
             circuit_breaker_timeout: Segundos que o circuit breaker permanece aberto.
             max_retries: Tentativas com backoff antes de considerar como falha.
         """
-        import vertexai  # noqa: PLC0415 — lazy import para reduzir memória em testes
-        vertexai.init(project=project_id, location=location)
+        self._project_id = project_id
+        self._location = location
         self._model_name = model_name
         self._output_dimensionality = output_dimensionality
         self._max_batch_size = max_batch_size
@@ -170,19 +170,57 @@ class VertexEmbeddingGateway(EmbeddingGateway):
     # ── Vertex AI call (síncrono, executado em thread) ───────────────────────
 
     def _call_vertex_sync(self, texts: list[str], task_type: str) -> list[list[float]]:
-        """Chamada síncrona ao Vertex AI SDK — executa em asyncio.to_thread.
+        """Chamada REST direta ao Vertex AI — equivalente ao curl de exemplo.
 
-        output_dimensionality reduz os vetores de 3072 → N dims configuradas,
-        mantendo compatibilidade com o schema vector(768) do banco.
+        POST https://{location}-aiplatform.googleapis.com/v1/projects/{project}
+             /locations/{location}/publishers/google/models/{model}:predict
+
+        Usa google.auth para obter o token de acesso, igual ao
+        `gcloud auth print-access-token` do exemplo curl.
         """
-        from vertexai.language_models import TextEmbeddingInput, TextEmbeddingModel  # noqa: PLC0415
-        model = TextEmbeddingModel.from_pretrained(self._model_name)
-        inputs = [TextEmbeddingInput(text, task_type=task_type) for text in texts]
-        embeddings = model.get_embeddings(
-            inputs,
-            output_dimensionality=self._output_dimensionality,
+        import json  # noqa: PLC0415
+
+        import google.auth  # noqa: PLC0415
+        import google.auth.transport.requests  # noqa: PLC0415
+        import requests as req  # noqa: PLC0415
+
+        # Obtém credenciais e token de acesso
+        credentials, _ = google.auth.default(
+            scopes=["https://www.googleapis.com/auth/cloud-platform"]
         )
-        return [list(e.values) for e in embeddings]
+        auth_request = google.auth.transport.requests.Request()
+        credentials.refresh(auth_request)
+
+        url = (
+            f"https://{self._location}-aiplatform.googleapis.com/v1"
+            f"/projects/{self._project_id}/locations/{self._location}"
+            f"/publishers/google/models/{self._model_name}:predict"
+        )
+
+        payload = {
+            "instances": [
+                {"content": text, "task_type": task_type} for text in texts
+            ],
+            "parameters": {"outputDimensionality": self._output_dimensionality},
+        }
+
+        headers = {
+            "Authorization": f"Bearer {credentials.token}",
+            "Content-Type": "application/json; charset=utf-8",
+        }
+
+        response = req.post(url, headers=headers, json=payload, timeout=60)
+        response.raise_for_status()
+
+        data = response.json()
+
+        # Resposta: {"predictions": [{"embeddings": {"values": [...], ...}}]}
+        results: list[list[float]] = []
+        for prediction in data["predictions"]:
+            values = prediction["embeddings"]["values"]
+            results.append(values)
+
+        return results
 
     # ── Retry com exponential backoff ────────────────────────────────────────
 
