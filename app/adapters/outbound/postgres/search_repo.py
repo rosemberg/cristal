@@ -288,6 +288,10 @@ class PostgresSearchRepository(SearchRepository):
             return await self._search_semantic_page_chunks(vec_str, model_name, top_k)
         if source_type == "synthetic_query":
             return await self._search_via_synthetic_queries(vec_str, model_name, top_k)
+        if source_type == "page_summary":
+            return await self._search_semantic_page_summaries(vec_str, model_name, top_k, filters)
+        if source_type == "section_summary":
+            return await self._search_via_section_summaries(vec_str, model_name, top_k)
         logger.warning("search_semantic: source_type desconhecido '%s'", source_type)
         return []
 
@@ -603,6 +607,113 @@ class PostgresSearchRepository(SearchRepository):
                     document_url=r["document_url"],
                     document_title=r["doc_title"],
                     chunk=chunk,
+                )
+            )
+        return results
+
+    async def _search_semantic_page_summaries(
+        self,
+        vec_str: str,
+        model_name: str,
+        top_k: int,
+        filters: dict[str, object] | None,
+    ) -> list[SemanticMatch]:
+        """Busca semântica via embeddings de sumários de página (Fase 2).
+
+        Idêntica a _search_semantic_pages mas usa source_type='page_summary'.
+        source_id = page.id, então o merge RRF deduplicará corretamente.
+        """
+        category_filter = (filters or {}).get("category")
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT e.source_id,
+                       1 - (e.embedding <=> $1::vector) AS similarity,
+                       p.*
+                FROM embeddings e
+                JOIN pages p ON p.id = e.source_id
+                WHERE e.source_type = 'page_summary'
+                  AND e.model_name   = $2
+                  AND ($3::text IS NULL OR p.category = $3)
+                ORDER BY e.embedding <=> $1::vector
+                LIMIT $4
+                """,
+                vec_str,
+                model_name,
+                category_filter,
+                top_k,
+            )
+        results: list[SemanticMatch] = []
+        for r in rows:
+            page = _record_to_page(r)
+            results.append(
+                SemanticMatch(
+                    source_id=r["source_id"],
+                    source_type="page_summary",
+                    similarity=float(r["similarity"]),
+                    document_url=page.url,
+                    document_title=page.title,
+                    page=page,
+                )
+            )
+        return results
+
+    async def _search_via_section_summaries(
+        self,
+        vec_str: str,
+        model_name: str,
+        top_k: int,
+    ) -> list[SemanticMatch]:
+        """Busca semântica via sumários de seções → resolve para página do documento.
+
+        Fluxo:
+        1. Encontra section_summary embeddings mais similares
+        2. Resolve section_summaries → document_contents → pages
+        3. Retorna SemanticMatch com source_id = page.id (para merge RRF correto)
+        """
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT
+                    1 - (e.embedding <=> $1::vector) AS similarity,
+                    p.id            AS page_id,
+                    p.*
+                FROM embeddings e
+                JOIN section_summaries ss ON ss.id = e.source_id
+                JOIN document_contents dc ON dc.id = ss.document_id
+                JOIN pages p ON p.url = dc.page_url
+                WHERE e.source_type = 'section_summary'
+                  AND e.model_name  = $2
+                ORDER BY e.embedding <=> $1::vector
+                LIMIT $3
+                """,
+                vec_str,
+                model_name,
+                top_k * 3,  # busca mais para compensar deduplicação por page_id
+            )
+
+        if not rows:
+            return []
+
+        # Deduplica por page_id, mantendo melhor score
+        best: dict[int, tuple[float, object]] = {}
+        for r in rows:
+            pid = r["page_id"]
+            score = float(r["similarity"])
+            if pid not in best or score > best[pid][0]:
+                best[pid] = (score, r)
+
+        results: list[SemanticMatch] = []
+        for pid, (score, r) in sorted(best.items(), key=lambda x: x[1][0], reverse=True)[:top_k]:
+            page = _record_to_page(r)
+            results.append(
+                SemanticMatch(
+                    source_id=pid,
+                    source_type="section_summary",
+                    similarity=score,
+                    document_url=page.url,
+                    document_title=page.title,
+                    page=page,
                 )
             )
         return results

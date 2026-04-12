@@ -3,15 +3,23 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 
 from app.domain.value_objects.ingestion import IngestionStats, IngestionStatus
+
+# Callback de progresso: (current, total, item_url, is_error)
+ProgressCallback = Callable[[int, int, str, bool], None] | None
 
 
 class DocumentIngestionUseCase(ABC):
     """Orquestra o pipeline de ingestão de documentos (download → processamento → persistência)."""
 
     @abstractmethod
-    async def ingest_pending(self, concurrency: int = 3) -> IngestionStats:
+    async def ingest_pending(
+        self,
+        concurrency: int = 3,
+        on_progress: ProgressCallback = None,
+    ) -> IngestionStats:
         """Processa todos os documentos com status 'pending'."""
         ...
 
@@ -21,8 +29,17 @@ class DocumentIngestionUseCase(ABC):
         ...
 
     @abstractmethod
-    async def reprocess_errors(self) -> IngestionStats:
+    async def reprocess_errors(self, on_progress: ProgressCallback = None) -> IngestionStats:
         """Reprocessa documentos que estão com status 'error'."""
+        ...
+
+    @abstractmethod
+    async def resume(
+        self,
+        concurrency: int = 3,
+        on_progress: ProgressCallback = None,
+    ) -> IngestionStats:
+        """Retoma pipeline após crash: reseta docs stuck em 'processing' e processa pendentes."""
         ...
 
     @abstractmethod

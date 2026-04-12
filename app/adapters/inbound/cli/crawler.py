@@ -31,6 +31,7 @@ from xml.etree import ElementTree
 import httpx
 from bs4 import BeautifulSoup
 
+from app.adapters.inbound.cli.progress import ProgressBar, format_duration, print_phase, print_summary
 from app.domain.ports.outbound.page_repository import (
     CrawledDocument,
     CrawledLink,
@@ -88,7 +89,7 @@ class CrawlerConfig:
     base_url: str = BASE_URL
     max_pages: int = 500
     max_depth: int = 7
-    delay: float = 0.5
+    delay: float = 0.3
     concurrency: int = 3
     timeout: float = 15.0
 
@@ -174,6 +175,8 @@ def _build_http_client(timeout: float = 15.0) -> httpx.AsyncClient:
 
 async def fetch_sitemap_urls(base_url: str) -> list[dict[str, object]]:
     """Obtém URLs da seção de transparência via sitemap Plone."""
+    import sys
+
     candidates = [
         f"{base_url}/sitemap.xml.gz",
         f"{base_url}/sitemap.xml",
@@ -184,7 +187,8 @@ async def fetch_sitemap_urls(base_url: str) -> list[dict[str, object]]:
     async with _build_http_client(timeout=30.0) as client:
         for sitemap_url in candidates:
             try:
-                logger.info("  Tentando sitemap: %s", sitemap_url)
+                sys.stderr.write(f"  Sitemap: {sitemap_url}\n")
+                sys.stderr.flush()
                 resp = await client.get(sitemap_url)
                 if resp.status_code != 200:
                     continue
@@ -204,10 +208,11 @@ async def fetch_sitemap_urls(base_url: str) -> list[dict[str, object]]:
                                 "discovered_via": "sitemap",
                             }
                         )
-                logger.info("  Sitemap OK: %d URLs", len(all_urls))
+                sys.stderr.write(f"  → {len(all_urls)} URLs no sitemap\n")
+                sys.stderr.flush()
                 break
             except Exception as exc:  # noqa: BLE001
-                logger.warning("  Sitemap falhou (%s): %s", sitemap_url, exc)
+                logger.debug("Sitemap falhou (%s): %s", sitemap_url, exc)
     return all_urls
 
 
@@ -215,9 +220,27 @@ async def crawl_discover_urls(
     start_url: str,
     max_pages: int = 500,
     max_depth: int = 7,
-    delay: float = 0.5,
+    delay: float = 0.3,
 ) -> dict[str, dict[str, object]]:
     """BFS a partir da raiz para descobrir URLs não listadas no sitemap."""
+    import shutil
+    import sys
+
+    is_tty = sys.stderr.isatty()
+
+    def _bfs_status(n_visited: int, n_queue: int, url: str) -> None:
+        cols = shutil.get_terminal_size((80, 24)).columns
+        if is_tty:
+            max_url = cols - 40
+            short = url if len(url) <= max_url else "…" + url[-(max_url - 1):]
+            line = f"\r  BFS: {n_visited} URLs  fila:{n_queue}  {short}"
+            sys.stderr.write(line[:cols].ljust(cols))
+            sys.stderr.flush()
+        else:
+            if n_visited % 50 == 0:
+                sys.stderr.write(f"  BFS: {n_visited} URLs descobertas\n")
+                sys.stderr.flush()
+
     visited: dict[str, dict[str, object]] = {}
     queue: deque[tuple[str, int, str | None]] = deque([(start_url, 0, None)])
 
@@ -254,7 +277,7 @@ async def crawl_discover_urls(
                             if link not in visited:
                                 queue.append((link, depth + 1, url))
 
-                logger.debug("  [%d] %s", len(visited), url)
+                _bfs_status(len(visited), len(queue), url)
 
             except Exception as exc:  # noqa: BLE001
                 visited[url] = {
@@ -271,11 +294,17 @@ async def crawl_discover_urls(
 
 async def discover_all_urls(base_url: str) -> list[dict[str, object]]:
     """Combina sitemap + BFS para cobertura máxima, sem duplicatas."""
-    logger.info("Fonte 1: Sitemap Plone")
+    import sys
+
+    sys.stderr.write("  Fonte 1: Sitemap Plone\n")
+    sys.stderr.flush()
     sitemap_urls = await fetch_sitemap_urls(base_url)
 
-    logger.info("Fonte 2: Crawling recursivo BFS")
+    sys.stderr.write("  Fonte 2: Crawling recursivo BFS\n")
+    sys.stderr.flush()
     crawled = await crawl_discover_urls(base_url)
+    sys.stderr.write("\n")  # fecha a linha do contador BFS
+    sys.stderr.flush()
 
     merged: dict[str, dict[str, object]] = {}
 
@@ -301,7 +330,9 @@ async def discover_all_urls(base_url: str) -> list[dict[str, object]]:
             )
 
     result = list(merged.values())
-    logger.info("Total de URLs descobertas (deduplicadas): %d", len(result))
+    import sys
+    sys.stderr.write(f"  → {len(result)} URLs únicas descobertas\n")
+    sys.stderr.flush()
     return result
 
 
@@ -461,19 +492,21 @@ class CrawlerCLI:
         start = datetime.now()
         stats = CrawlerStats()
 
-        logger.info("=== FASE 1: Descoberta de URLs ===")
+        print_phase("FASE 1/2 — Descoberta de URLs  (sitemap + BFS)")
         urls = await discover_all_urls(self._config.base_url)
         stats.urls_discovered = len(urls)
-        logger.info("URLs descobertas: %d", stats.urls_discovered)
 
-        logger.info("=== FASE 2: Extração + Persistência ===")
+        print_phase("FASE 2/2 — Extração + Persistência")
         await self._extract_and_upsert(urls, stats)
 
         stats.duration_seconds = (datetime.now() - start).total_seconds()
-        logger.info(
-            "Concluído: %d páginas upsertadas, %d erros (%.1fs)",
-            stats.pages_upserted,
-            stats.errors,
+        print_summary(
+            "Crawler — Resumo",
+            {
+                "URLs descobertas": stats.urls_discovered,
+                "Páginas persistidas": stats.pages_upserted,
+                "Erros": stats.errors,
+            },
             stats.duration_seconds,
         )
         return stats
@@ -483,17 +516,21 @@ class CrawlerCLI:
         start = datetime.now()
         stats = CrawlerStats()
 
-        logger.info("=== ATUALIZAÇÃO INCREMENTAL ===")
+        print_phase("Atualização incremental — Sitemap")
         sitemap_urls = await fetch_sitemap_urls(self._config.base_url)
         stats.urls_discovered = len(sitemap_urls)
 
+        print_phase("Extração + Persistência")
         await self._extract_and_upsert(sitemap_urls, stats)
 
         stats.duration_seconds = (datetime.now() - start).total_seconds()
-        logger.info(
-            "Atualização concluída: %d/%d páginas processadas (%.1fs)",
-            stats.pages_upserted,
-            stats.urls_discovered,
+        print_summary(
+            "Atualização — Resumo",
+            {
+                "URLs verificadas": stats.urls_discovered,
+                "Páginas atualizadas": stats.pages_upserted,
+                "Erros": stats.errors,
+            },
             stats.duration_seconds,
         )
         return stats
@@ -503,17 +540,51 @@ class CrawlerCLI:
         total = await self._repo.count_pages()
         return {"total_pages": total}
 
+    async def run_skip_known(self) -> CrawlerStats:
+        """Pipeline completo, pulando extração de URLs já presentes no banco."""
+        start = datetime.now()
+        stats = CrawlerStats()
+
+        print_phase("FASE 1/2 — Descoberta de URLs  (sitemap + BFS)")
+        urls = await discover_all_urls(self._config.base_url)
+        stats.urls_discovered = len(urls)
+
+        import sys
+        known_urls = await self._repo.list_known_urls()
+        new_urls = [u for u in urls if _normalize_url(str(u["url"])) not in known_urls]
+        sys.stderr.write(
+            f"  → {len(known_urls)} URLs já conhecidas; {len(new_urls)} novas para extrair\n"
+        )
+        sys.stderr.flush()
+
+        print_phase("FASE 2/2 — Extração + Persistência  (skip-known)")
+        await self._extract_and_upsert(new_urls, stats)
+
+        stats.duration_seconds = (datetime.now() - start).total_seconds()
+        print_summary(
+            "Crawler skip-known — Resumo",
+            {
+                "URLs descobertas": stats.urls_discovered,
+                "URLs novas extraídas": len(new_urls),
+                "Páginas persistidas": stats.pages_upserted,
+                "Erros": stats.errors,
+            },
+            stats.duration_seconds,
+        )
+        return stats
+
     async def _extract_and_upsert(
         self, url_list: list[dict[str, object]], stats: CrawlerStats
     ) -> None:
         """Extrai e persiste URLs com concorrência controlada."""
         semaphore = asyncio.Semaphore(self._config.concurrency)
         total = len(url_list)
+        progress = ProgressBar(total, prefix="Extração")
 
         async with _build_http_client(self._config.timeout) as client:
             extractor = PageExtractor(client)
 
-            async def process(idx: int, url_data: dict[str, object]) -> None:
+            async def process(url_data: dict[str, object]) -> None:
                 async with semaphore:
                     await asyncio.sleep(self._config.delay)
                     url = str(url_data["url"])
@@ -536,14 +607,16 @@ class CrawlerCLI:
 
                         await self._repo.upsert_page(page)
                         stats.pages_upserted += 1
-                        logger.info("[%d/%d] OK: %s", idx + 1, total, url)
+                        progress.update(current_item=url)
 
                     except Exception as exc:  # noqa: BLE001
                         stats.errors += 1
-                        logger.error("[%d/%d] ERRO: %s — %s", idx + 1, total, url, exc)
+                        progress.update(current_item=url, error=True)
+                        logger.debug("ERRO: %s — %s", url, exc)
 
-            tasks = [process(i, u) for i, u in enumerate(url_list)]
+            tasks = [process(u) for u in url_list]
             await asyncio.gather(*tasks)
+            progress.finish()
 
 
 # ─── CLI entry point ──────────────────────────────────────────────────────────
@@ -578,7 +651,7 @@ def main() -> None:
     import argparse
 
     logging.basicConfig(
-        level=logging.INFO,
+        level=logging.WARNING,
         format="%(asctime)s [%(levelname)s] %(message)s",
         datefmt="%H:%M:%S",
     )
@@ -587,7 +660,8 @@ def main() -> None:
         description="Crawler da base de conhecimento — Transparência TRE-PI"
     )
     parser.add_argument("--full", action="store_true", help="Crawling completo")
-    parser.add_argument("--update", action="store_true", help="Atualização incremental")
+    parser.add_argument("--update", action="store_true", help="Atualização incremental (sitemap)")
+    parser.add_argument("--skip-known", action="store_true", help="Crawling completo, pulando URLs já no banco")
     parser.add_argument("--stats", action="store_true", help="Estatísticas do banco")
     parser.add_argument("--test-url", metavar="URL", help="Testar extração de uma URL")
     args = parser.parse_args()
@@ -596,7 +670,7 @@ def main() -> None:
         asyncio.run(_test_url_cmd(args.test_url))
         return
 
-    if not (args.full or args.update or args.stats):
+    if not (args.full or args.update or args.stats or args.skip_known):
         parser.print_help()
         return
 
@@ -615,6 +689,18 @@ def main() -> None:
 
             if args.full:
                 stats = await crawler.run_full()
+                result = json.dumps(
+                    {
+                        "urls_discovered": stats.urls_discovered,
+                        "pages_upserted": stats.pages_upserted,
+                        "errors": stats.errors,
+                        "duration_seconds": round(stats.duration_seconds, 2),
+                    },
+                    indent=2,
+                )
+                print(result)  # noqa: T201
+            elif args.skip_known:
+                stats = await crawler.run_skip_known()
                 result = json.dumps(
                     {
                         "urls_discovered": stats.urls_discovered,

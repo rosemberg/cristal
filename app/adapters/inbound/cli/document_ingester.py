@@ -21,26 +21,13 @@ import logging
 import sys
 from datetime import datetime, timezone
 
+from app.adapters.inbound.cli.progress import ProgressBar, format_duration, print_summary
 from app.domain.ports.inbound.data_health_check_use_case import DataHealthCheckUseCase
 from app.domain.ports.inbound.document_ingestion_use_case import DocumentIngestionUseCase
 from app.domain.value_objects.data_inconsistency import DataInconsistency, HealthCheckReport
 from app.domain.value_objects.ingestion import IngestionStats, IngestionStatus
 
 logger = logging.getLogger(__name__)
-
-# ── Utilitários de formatação ─────────────────────────────────────────────────
-
-
-def _format_duration(seconds: float) -> str:
-    """Formata duração em segundos para string legível."""
-    total = int(seconds)
-    if total < 60:
-        return f"{total}s"
-    hours, remainder = divmod(total, 3600)
-    minutes, secs = divmod(remainder, 60)
-    if hours:
-        return f"{hours}h {minutes}m {secs}s"
-    return f"{minutes}m {secs}s"
 
 
 def _severity_icon(severity: str) -> str:
@@ -70,33 +57,94 @@ class DocumentIngesterCLI:
 
     async def run(self, concurrency: int = 3) -> None:
         """Executa ingestão de todos os documentos pendentes."""
-        print("\n=== Ingestão de Documentos ===")
-        print(f"Processando com concorrência: {concurrency}")
-        print()
+        import sys
+
+        sys.stderr.write(f"\n  Concorrência: {concurrency}\n\n")
+        sys.stderr.flush()
+
+        pipeline_status = await self._ingestion_service.get_status()
+        progress = ProgressBar(pipeline_status.pending, prefix="Ingestão")
+
+        def on_progress(current: int, total: int, url: str, is_error: bool) -> None:
+            progress.update(current_item=url, error=is_error)
 
         stats: IngestionStats = await self._ingestion_service.ingest_pending(
-            concurrency=concurrency
+            concurrency=concurrency,
+            on_progress=on_progress,
         )
+        progress.finish()
 
-        print("=== Resultado ===")
-        print(f"Processados:              {stats.processed}/{stats.total}")
-        print(f"Erros:                    {stats.errors}")
-        print(f"Inconsistências:          {stats.inconsistencies_found}")
-        print(f"Duração:                  {_format_duration(stats.duration_seconds)}")
+        print_summary(
+            "Ingestão — Resumo",
+            {
+                "Processados": f"{stats.processed}/{stats.total}",
+                "Erros": stats.errors,
+                "Inconsistências": stats.inconsistencies_found,
+            },
+            stats.duration_seconds,
+        )
 
     # ── reprocess ─────────────────────────────────────────────────────────────
 
     async def reprocess(self) -> None:
         """Reprocessa documentos que estão com status 'error'."""
-        print("\n=== Reprocessamento de Erros ===")
+        import sys
 
-        stats: IngestionStats = await self._ingestion_service.reprocess_errors()
+        sys.stderr.write("\n  Reprocessando documentos com erro...\n\n")
+        sys.stderr.flush()
 
-        print("=== Resultado ===")
-        print(f"Processados:              {stats.processed}/{stats.total}")
-        print(f"Erros restantes:          {stats.errors}")
-        print(f"Inconsistências:          {stats.inconsistencies_found}")
-        print(f"Duração:                  {_format_duration(stats.duration_seconds)}")
+        pipeline_status = await self._ingestion_service.get_status()
+        progress = ProgressBar(pipeline_status.error, prefix="Reprocess")
+
+        def on_progress(current: int, total: int, url: str, is_error: bool) -> None:
+            progress.update(current_item=url, error=is_error)
+
+        stats: IngestionStats = await self._ingestion_service.reprocess_errors(
+            on_progress=on_progress
+        )
+        progress.finish()
+
+        print_summary(
+            "Reprocessamento — Resumo",
+            {
+                "Processados": f"{stats.processed}/{stats.total}",
+                "Erros restantes": stats.errors,
+                "Inconsistências": stats.inconsistencies_found,
+            },
+            stats.duration_seconds,
+        )
+
+    # ── resume ────────────────────────────────────────────────────────────────
+
+    async def resume(self, concurrency: int = 3) -> None:
+        """Retoma pipeline após crash: libera docs stuck e processa pendentes."""
+        import sys
+
+        sys.stderr.write(f"\n  Retomando pipeline  (concorrência: {concurrency})\n\n")
+        sys.stderr.flush()
+
+        pipeline_status = await self._ingestion_service.get_status()
+        total_resumable = pipeline_status.pending + pipeline_status.processing
+        progress = ProgressBar(max(total_resumable, 1), prefix="Resume")
+
+        def on_progress(current: int, total: int, url: str, is_error: bool) -> None:
+            progress.update(current_item=url, error=is_error)
+
+        stats: IngestionStats = await self._ingestion_service.resume(
+            concurrency=concurrency,
+            on_progress=on_progress,
+        )
+        progress.finish()
+
+        print_summary(
+            "Retomada — Resumo",
+            {
+                "Processados": f"{stats.processed}/{stats.total}",
+                "Erros": stats.errors,
+                "Inconsistências": stats.inconsistencies_found,
+            },
+            stats.duration_seconds,
+        )
 
     # ── status ────────────────────────────────────────────────────────────────
 
@@ -142,7 +190,7 @@ class DocumentIngesterCLI:
         print(f"Novas inconsistências:    {report.new_inconsistencies}")
         print(f"Atualizadas:              {report.updated_inconsistencies}")
         print(f"Auto-resolvidas:          {report.auto_resolved}")
-        print(f"Duração:                  {_format_duration(report.duration_seconds)}")
+        print(f"Duração:                  {format_duration(report.duration_seconds)}")
 
         if report.by_type:
             print("\nInconsistências por tipo:")
@@ -230,9 +278,12 @@ async def _build_cli_async() -> tuple[DocumentIngesterCLI, object]:
     settings = get_settings()
 
     # Importações lazy para não penalizar --help
-    from app.adapters.outbound.postgres.document_ingestion_repo import (
-        PostgresDocumentIngestionRepository,
+    from app.adapters.outbound.document_processor.document_process_adapter import (
+        DocumentProcessAdapter,
     )
+    from app.adapters.outbound.document_processor.document_processor import DocumentProcessor
+    from app.adapters.outbound.http.document_downloader import HttpDocumentDownloader
+    from app.adapters.outbound.postgres.document_repo import PostgresDocumentRepository
     from app.adapters.outbound.postgres.inconsistency_repo import PostgresInconsistencyRepository
     from app.adapters.outbound.postgres.page_repo import PostgresPageRepository
     from app.domain.services.data_health_check_service import DataHealthCheckService
@@ -242,44 +293,25 @@ async def _build_cli_async() -> tuple[DocumentIngesterCLI, object]:
     await db.__aenter__()
     pool = get_pool(db)
 
-    doc_repo = PostgresDocumentIngestionRepository(pool)
+    doc_repo = PostgresDocumentRepository(pool)
     page_repo = PostgresPageRepository(pool)
     inconsistency_repo = PostgresInconsistencyRepository(pool)
 
-    # Download gateway
-    try:
-        from app.adapters.outbound.http.document_download_gateway import (
-            HttpDocumentDownloadGateway,
-        )
-        download_gw = HttpDocumentDownloadGateway()
-    except ImportError:
-        from app.adapters.outbound.http.document_downloader import HttpDocumentDownloader
-        download_gw = HttpDocumentDownloader()
-
-    # Process gateway
-    try:
-        from app.adapters.outbound.process.document_process_gateway import (
-            DefaultDocumentProcessGateway,
-        )
-        process_gw = DefaultDocumentProcessGateway()
-    except ImportError:
-        from app.adapters.outbound.process.document_process_adapter import (
-            DocumentProcessAdapter,
-        )
-        process_gw = DocumentProcessAdapter()
+    download_gw = HttpDocumentDownloader()
+    process_gw = DocumentProcessAdapter(DocumentProcessor())
 
     ingestion_service = DocumentIngestionService(
-        document_repository=doc_repo,
-        download_gateway=download_gw,
-        process_gateway=process_gw,
-        inconsistency_repository=inconsistency_repo,
+        doc_repo=doc_repo,
+        downloader=download_gw,
+        processor=process_gw,
+        inconsistency_repo=inconsistency_repo,
     )
 
     health_check_service = DataHealthCheckService(
-        page_repository=page_repo,
-        document_repository=doc_repo,
-        download_gateway=download_gw,
-        inconsistency_repository=inconsistency_repo,
+        downloader=download_gw,
+        page_repo=page_repo,
+        doc_repo=doc_repo,
+        inconsistency_repo=inconsistency_repo,
     )
 
     cli = DocumentIngesterCLI(
@@ -313,6 +345,11 @@ def main() -> None:
         "--run",
         action="store_true",
         help="Processa todos os documentos pendentes",
+    )
+    group.add_argument(
+        "--resume",
+        action="store_true",
+        help="Retoma pipeline após crash (libera docs stuck + processa pendentes)",
     )
     group.add_argument(
         "--reprocess",
@@ -373,6 +410,8 @@ def main() -> None:
         try:
             if args.run:
                 await cli.run(concurrency=args.concurrency)
+            elif args.resume:
+                await cli.resume(concurrency=args.concurrency)
             elif args.reprocess:
                 await cli.reprocess()
             elif args.status:

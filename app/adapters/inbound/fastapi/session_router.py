@@ -96,8 +96,8 @@ async def list_messages(
                 ],
                 tables=[
                     TableDataOut(
-                        headers=t.headers,
-                        rows=t.rows,
+                        headers=[str(h) if h is not None else "" for h in t.headers],
+                        rows=[[str(c) if c is not None else "" for c in row] for row in t.rows],
                         source_document=t.source_document,
                         title=t.title,
                         page_number=t.page_number,

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 import time
+from decimal import Decimal, InvalidOperation
 from uuid import UUID
 
 from app.domain.ports.inbound.chat_use_case import ChatUseCase
@@ -32,6 +33,55 @@ _DEFAULT_SUGGESTIONS = [
 # Regex to extract JSON from markdown code fences or raw JSON blocks
 _JSON_PATTERN = re.compile(r"```(?:json)?\s*(\{.*?\})\s*```|(\{.*\})", re.DOTALL)
 
+# Regex que aceita "R$ 1.234.567,89", "1.234.567,89", "1234567.89" etc.
+_BRL_PATTERN = re.compile(r"[\d.,]+")
+
+
+def _parse_brl(value: str) -> Decimal | None:
+    """Converte string monetária brasileira para Decimal. Retorna None se inválida."""
+    raw = value.strip().lstrip("R$").strip()
+    m = _BRL_PATTERN.search(raw)
+    if not m:
+        return None
+    s = m.group()
+    # Formato BR: pontos como milhar, vírgula como decimal → "1.234.567,89"
+    if "," in s:
+        s = s.replace(".", "").replace(",", ".")
+    # Senão: assume ponto já é decimal
+    try:
+        return Decimal(s)
+    except InvalidOperation:
+        return None
+
+
+def _sum_value_column(rows: list[list[object]], col_idx: int) -> Decimal | None:
+    """Soma todos os valores da coluna col_idx, ignorando células não-numéricas."""
+    total = Decimal(0)
+    found_any = False
+    for row in rows:
+        if col_idx >= len(row):
+            continue
+        val = _parse_brl(str(row[col_idx]))
+        if val is not None:
+            total += val
+            found_any = True
+    return total if found_any else None
+
+
+def _format_brl(value: Decimal) -> str:
+    """Formata Decimal como 'R$ 1.234.567,89'."""
+    # Arredonda para 2 casas
+    value = value.quantize(Decimal("0.01"))
+    # Separa inteiro e decimal
+    parts = str(value).split(".")
+    integer_part = parts[0]
+    decimal_part = parts[1] if len(parts) > 1 else "00"
+    # Insere pontos a cada 3 dígitos no inteiro
+    rev = integer_part[::-1]
+    grouped = ".".join(rev[i:i+3] for i in range(0, len(rev), 3))
+    integer_fmt = grouped[::-1]
+    return f"R$ {integer_fmt},{decimal_part}"
+
 
 class ChatService(ChatUseCase):
     """
@@ -53,7 +103,7 @@ class ChatService(ChatUseCase):
         llm: LLMGateway,
         prompt_builder: PromptBuilder | None = None,
         table_validator: TableValidatorAgent | None = None,
-        top_k: int = 5,
+        top_k: int = 10,
     ) -> None:
         self._search = search_repo
         self._sessions = session_repo
@@ -75,7 +125,8 @@ class ChatService(ChatUseCase):
         intent = self._builder.classify_intent(message)
 
         # 2. Search context
-        pages = await self._search.search_pages(message, top_k=self._top_k)
+        # Páginas recebem top_k maior pois carregam main_content extenso
+        pages = await self._search.search_pages(message, top_k=self._top_k * 2)
         chunks = await self._search.search_chunks(message, top_k=self._top_k)
         tables = await self._search.search_tables(message)
 
@@ -84,7 +135,7 @@ class ChatService(ChatUseCase):
 
         # 3. Build prompt
         system_prompt = self._builder.build_system_prompt()
-        context = self._builder.build_context(pages=pages, chunks=chunks, tables=tables)
+        context = self._builder.build_context(pages=pages, chunks=chunks, tables=tables, query=message)
 
         formatted_history = self._builder.format_history(history)
         llm_messages: list[dict[str, object]] = [
@@ -179,7 +230,68 @@ class ChatService(ChatUseCase):
                     )
                 )
 
+        metrics = self._fix_metrics_from_tables(metrics, tables)
+
         return ChatMessage(role="assistant", content=str(text), sources=sources, tables=tables, suggestions=suggestions, metrics=metrics)
+
+    @staticmethod
+    def _fix_metrics_from_tables(
+        metrics: list[MetricItem],
+        tables: list[TableData],
+    ) -> list[MetricItem]:
+        """Recalcula métricas de contagem e soma a partir das linhas reais da tabela.
+
+        O LLM pode gerar métricas incorretas (conta/soma baseada no texto da página
+        em vez das linhas retornadas). Este método substitui os valores de:
+        - "Total de contratos" / "Total de registros" → contagem real de linhas
+        - "Valor total" → soma real da coluna de valor da tabela
+
+        Apenas corrige métricas quando há exatamente uma tabela com coluna de valor.
+        """
+        if not tables or not metrics:
+            return metrics
+
+        # Usa apenas a primeira tabela para correção (caso mais comum)
+        table = tables[0]
+        headers = [h.lower().strip() for h in table.headers]
+
+        # Encontra índice da coluna de valor monetário
+        _VALUE_NAMES = {"valor", "value", "valor total", "total", "preço", "preco", "montante"}
+        value_col: int | None = None
+        for i, h in enumerate(headers):
+            if h in _VALUE_NAMES:
+                value_col = i
+                break
+
+        # Filtra linhas de totalizador (linha TOTAL adicionada pelo LLM)
+        data_rows = [
+            row for row in table.rows
+            if row and str(row[0]).strip().upper() not in {"TOTAL", "SUBTOTAL", "GRAND TOTAL"}
+        ]
+        row_count = len(data_rows)
+
+        # Substitui métrica de contagem
+        updated: list[MetricItem] = []
+        count_labels = {"total de contratos", "total de registros", "contratos", "registros", "quantidade"}
+        value_labels = {"valor total", "valor", "total"}
+        count_updated = False
+        value_updated = False
+
+        for m in metrics:
+            label_lower = m.label.lower().strip()
+            if not count_updated and label_lower in count_labels:
+                updated.append(MetricItem(label=m.label, value=str(row_count)))
+                count_updated = True
+                continue
+            if not value_updated and value_col is not None and label_lower in value_labels:
+                total = _sum_value_column(data_rows, value_col)
+                if total is not None:
+                    updated.append(MetricItem(label=m.label, value=_format_brl(total)))
+                    value_updated = True
+                    continue
+            updated.append(m)
+
+        return updated
 
     @staticmethod
     def _extract_json(raw: str) -> dict[str, object] | None:

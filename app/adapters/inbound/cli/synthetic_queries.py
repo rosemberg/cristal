@@ -42,28 +42,55 @@ class SyntheticQueriesCLI:
         batch_size: int = 50,
         source_types: list[str] | None = None,
     ) -> None:
-        """Gera perguntas sintéticas para chunks pendentes."""
+        """Gera perguntas sintéticas para todos os chunks pendentes.
+
+        Itera internamente em lotes de ``batch_size`` até não restar chunks,
+        eliminando a necessidade de um loop externo no shell.
+        """
         types_label = ", ".join(source_types) if source_types else "page_chunk + chunk"
         sys.stderr.write(f"\n  Gerando perguntas sintéticas ({types_label})\n\n")
         sys.stderr.flush()
 
         start = datetime.now(tz=timezone.utc)
 
-        result: GenerationResult = await self._service.generate_for_pending_chunks(
-            batch_size=batch_size,
-            source_types=source_types,
-        )
+        total = GenerationResult()
+        iteration = 0
+
+        while True:
+            iteration += 1
+            result: GenerationResult = await self._service.generate_for_pending_chunks(
+                batch_size=batch_size,
+                source_types=source_types,
+            )
+
+            total.chunks_processed += result.chunks_processed
+            total.questions_generated += result.questions_generated
+            total.embeddings_created += result.embeddings_created
+            total.errors += result.errors
+            # skipped representa os IDs já cobertos; cresce a cada iteração,
+            # então usamos sempre o valor mais recente (não acumulamos).
+            total.skipped = result.skipped
+
+            if result.chunks_processed == 0:
+                break
+
+            if iteration > 1:
+                sys.stderr.write(
+                    f"  Lote {iteration}: +{result.chunks_processed} chunks,"
+                    f" +{result.questions_generated} perguntas\n"
+                )
+                sys.stderr.flush()
 
         duration = (datetime.now(tz=timezone.utc) - start).total_seconds()
 
         print_summary(
             "Perguntas Sintéticas — Resumo",
             {
-                "Chunks processados": result.chunks_processed,
-                "Perguntas geradas": result.questions_generated,
-                "Embeddings criados": result.embeddings_created,
-                "Erros": result.errors,
-                "Já cobertos (skip)": result.skipped,
+                "Chunks processados": total.chunks_processed,
+                "Perguntas geradas": total.questions_generated,
+                "Embeddings criados": total.embeddings_created,
+                "Erros": total.errors,
+                "Já cobertos (skip)": total.skipped,
             },
             duration,
         )

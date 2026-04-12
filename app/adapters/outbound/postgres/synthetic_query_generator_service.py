@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 # Mapa: source_type → tabela e coluna de texto
 _SOURCE_TABLE_MAP = {
     "page_chunk": ("page_chunks", "chunk_text"),
-    "chunk": ("document_chunks", "content"),
+    "chunk": ("document_chunks", "chunk_text"),
 }
 
 

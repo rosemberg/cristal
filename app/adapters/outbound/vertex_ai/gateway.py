@@ -29,9 +29,16 @@ logger = logging.getLogger(__name__)
 class VertexAIGateway(LLMGateway):
     """Adapter que conecta LLMGateway ao Vertex AI / Gemini."""
 
-    def __init__(self, project_id: str, location: str, model_name: str) -> None:
+    def __init__(
+        self,
+        project_id: str,
+        location: str,
+        model_name: str,
+        timeout_seconds: float = 120.0,
+    ) -> None:
         vertexai.init(project=project_id, location=location)
         self._model_name = model_name
+        self._timeout = timeout_seconds
 
     def _build_contents(self, messages: list[dict[str, object]]) -> list[Content]:
         """Converte mensagens do domínio para o formato Content do Vertex AI.
@@ -56,9 +63,19 @@ class VertexAIGateway(LLMGateway):
         model = GenerativeModel(self._model_name, system_instruction=system_prompt)
         contents = self._build_contents(messages)
         config = GenerationConfig(temperature=temperature)
-        response = await asyncio.to_thread(
-            model.generate_content, contents, generation_config=config
-        )
+        try:
+            response = await asyncio.wait_for(
+                asyncio.to_thread(
+                    model.generate_content, contents, generation_config=config
+                ),
+                timeout=self._timeout,
+            )
+        except asyncio.TimeoutError:
+            logger.warning(
+                "VertexAIGateway: timeout após %.0fs em generate_content",
+                self._timeout,
+            )
+            raise
         return response.text  # type: ignore[no-any-return]
 
     async def generate_stream(

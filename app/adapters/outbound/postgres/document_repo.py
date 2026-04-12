@@ -158,25 +158,25 @@ class PostgresDocumentRepository(DocumentRepository):
             for r in rows
         ]
 
-    async def list_pending(self, limit: int = 50) -> list[Document]:
+    async def list_pending(self, limit: int = 0) -> list[Document]:
+        _SELECT = """
+            SELECT d.id,
+                   d.page_url,
+                   d.document_url,
+                   d.document_type,
+                   d.document_title,
+                   d.processing_status,
+                   dc.num_pages
+            FROM documents d
+            LEFT JOIN document_contents dc ON dc.document_url = d.document_url
+            WHERE d.processing_status = 'pending'
+            ORDER BY d.created_at ASC
+        """
         async with self._pool.acquire() as conn:
-            rows = await conn.fetch(
-                """
-                SELECT d.id,
-                       d.page_url,
-                       d.document_url,
-                       d.document_type,
-                       d.document_title,
-                       d.processing_status,
-                       dc.num_pages
-                FROM documents d
-                LEFT JOIN document_contents dc ON dc.document_url = d.document_url
-                WHERE d.processing_status = 'pending'
-                ORDER BY d.created_at ASC
-                LIMIT $1
-                """,
-                limit,
-            )
+            if limit > 0:
+                rows = await conn.fetch(_SELECT + " LIMIT $1", limit)
+            else:
+                rows = await conn.fetch(_SELECT)
         return [_record_to_document(r) for r in rows]
 
     async def list_errors(self) -> list[Document]:
@@ -197,6 +197,33 @@ class PostgresDocumentRepository(DocumentRepository):
                 """,
             )
         return [_record_to_document(r) for r in rows]
+
+    async def reset_stuck_processing(self, stuck_minutes: int = 30) -> int:
+        async with self._pool.acquire() as conn:
+            if stuck_minutes > 0:
+                result = await conn.execute(
+                    """
+                    UPDATE documents
+                    SET processing_status = 'pending',
+                        processing_error  = NULL,
+                        processed_at      = NOW()
+                    WHERE processing_status = 'processing'
+                      AND processed_at < NOW() - ($1 * interval '1 minute')
+                    """,
+                    stuck_minutes,
+                )
+            else:
+                result = await conn.execute(
+                    """
+                    UPDATE documents
+                    SET processing_status = 'pending',
+                        processing_error  = NULL,
+                        processed_at      = NOW()
+                    WHERE processing_status = 'processing'
+                    """
+                )
+        # asyncpg retorna "UPDATE N"
+        return int(result.split()[-1])
 
     async def update_status(
         self, document_url: str, status: str, error: str | None = None
@@ -240,6 +267,11 @@ class PostgresDocumentRepository(DocumentRepository):
                     INSERT INTO document_contents
                         (document_url, document_title, full_text, num_pages, processing_status)
                     VALUES ($1, $2, $3, $4, 'done')
+                    ON CONFLICT (document_url) DO UPDATE SET
+                        document_title   = EXCLUDED.document_title,
+                        full_text        = EXCLUDED.full_text,
+                        num_pages        = EXCLUDED.num_pages,
+                        processing_status = EXCLUDED.processing_status
                     """,
                     document_url,
                     content.title,
@@ -251,8 +283,9 @@ class PostgresDocumentRepository(DocumentRepository):
                         """
                         INSERT INTO document_chunks
                             (document_url, chunk_index, chunk_text,
-                             section_title, page_number, token_count)
-                        VALUES ($1, $2, $3, $4, $5, $6)
+                             section_title, page_number, token_count,
+                             version, has_table, parent_chunk_id)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                         """,
                         [
                             (
@@ -262,6 +295,9 @@ class PostgresDocumentRepository(DocumentRepository):
                                 c.section_title,
                                 c.page_number,
                                 c.token_count,
+                                c.version,
+                                c.has_table,
+                                c.parent_chunk_id,
                             )
                             for c in content.chunks
                         ],
@@ -364,8 +400,9 @@ class PostgresDocumentRepository(DocumentRepository):
                         """
                         INSERT INTO document_chunks
                             (document_url, chunk_index, chunk_text,
-                             section_title, page_number, token_count)
-                        VALUES ($1, $2, $3, $4, $5, $6)
+                             section_title, page_number, token_count,
+                             version, has_table, parent_chunk_id)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                         """,
                         [
                             (
@@ -375,6 +412,9 @@ class PostgresDocumentRepository(DocumentRepository):
                                 c.section_title,
                                 c.page_number,
                                 c.token_count,
+                                c.version,
+                                c.has_table,
+                                c.parent_chunk_id,
                             )
                             for c in content.chunks
                         ],

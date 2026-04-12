@@ -256,12 +256,25 @@ class HybridSearchService(SearchRepository):
             return []
 
     async def _semantic_pages(self, query: str, top_k: int) -> list[SemanticMatch]:
-        """Tenta busca semântica de pages; retorna [] se gateway indisponível."""
+        """Tenta busca semântica de pages (Fase 2: inclui page_summary e section_summary).
+
+        Busca em paralelo em 3 estratégias:
+        - 'page': embedding do conteúdo bruto da página
+        - 'page_summary': embedding do sumário LLM (Fase 2)
+        - 'section_summary': embedding de seções de documentos longos (Fase 2)
+
+        Retorna [] se gateway indisponível.
+        """
         if self._embedding_gw is None:
             return []
         try:
             embedding = await self._embedding_gw.embed_text(query, task_type="RETRIEVAL_QUERY")
-            return await self._repo.search_semantic(embedding, source_type="page", top_k=top_k)
+            page_embs, page_summary_embs, section_embs = await asyncio.gather(
+                self._repo.search_semantic(embedding, source_type="page", top_k=top_k),
+                self._repo.search_semantic(embedding, source_type="page_summary", top_k=top_k),
+                self._repo.search_semantic(embedding, source_type="section_summary", top_k=top_k),
+            )
+            return page_embs + page_summary_embs + section_embs
         except EmbeddingUnavailableError:
             logger.info("HybridSearch: EmbeddingGateway indisponível — usando apenas FTS para pages.")
             return []

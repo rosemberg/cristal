@@ -173,3 +173,9 @@ class PostgresPageRepository(PageRepository):
             )
             for r in rows
         ]
+
+    async def list_known_urls(self) -> set[str]:
+        """Retorna conjunto de URLs já persistidas no banco."""
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch("SELECT url FROM pages")
+        return {r["url"] for r in rows}

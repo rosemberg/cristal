@@ -93,3 +93,8 @@ class PageRepository(ABC):
     async def list_all_links(self) -> list[LinkCheckInfo]:
         """Retorna todos os links de page_links com URL, título e página-mãe."""
         ...
+
+    @abstractmethod
+    async def list_known_urls(self) -> set[str]:
+        """Retorna conjunto de URLs já persistidas (para skip no crawler)."""
+        ...

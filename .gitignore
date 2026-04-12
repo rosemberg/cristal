@@ -32,3 +32,11 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
+
+# Logs e saída de execução
+logs/
+*.log
+nohup.out
+
+# Site separado (não versionar junto)
+novo-rag-site/

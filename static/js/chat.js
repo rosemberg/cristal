@@ -5,18 +5,18 @@
 
   // ===== SVG Icons =====
   var ICONS = {
-    scale: '<svg class="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3"/></svg>',
-    user: '<svg class="w-5 h-5 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>',
-    fileText: '<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>',
-    link: '<svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>',
-    externalLink: '<svg class="w-3.5 h-3.5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>',
-    search: '<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>',
-    chevronDown: '<svg class="w-4 h-4 accordion-arrow transition-transform duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>',
-    alertCircle: '<svg class="w-4 h-4 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
-    download: '<svg class="w-4 h-4 flex-shrink-0 text-brand-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>',
-    play: '<svg class="w-4 h-4 flex-shrink-0 text-brand-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
-    code: '<svg class="w-4 h-4 flex-shrink-0 text-brand-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>',
-    page: '<svg class="w-4 h-4 flex-shrink-0 text-brand-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>',
+    scale: '<svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3"/></svg>',
+    user: '<svg width="20" height="20" class="icon-user" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>',
+    fileText: '<svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>',
+    link: '<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>',
+    externalLink: '<svg width="14" height="14" class="icon-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>',
+    search: '<svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>',
+    chevronDown: '<svg width="16" height="16" class="accordion-arrow" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>',
+    alertCircle: '<svg width="16" height="16" class="icon-inline" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
+    download: '<svg width="16" height="16" class="icon-inline icon-brand" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>',
+    play: '<svg width="16" height="16" class="icon-inline icon-brand" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
+    code: '<svg width="16" height="16" class="icon-inline icon-brand" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>',
+    page: '<svg width="16" height="16" class="icon-inline icon-brand" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>',
     thumbUp: '<svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5"/></svg>',
     thumbDown: '<svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M10 14H5.236a2 2 0 01-1.789-2.894l3.5-7A2 2 0 018.736 3h4.018a2 2 0 01.485.06l3.76.94m-7 10v5a2 2 0 002 2h.096c.5 0 .905-.405.905-.904 0-.715.211-1.413.608-2.008L17 13V4m-7 10h2m5-10h2a2 2 0 012 2v6a2 2 0 01-2 2h-2.5"/></svg>',
   };
@@ -134,6 +134,16 @@
     }
 
     appendUserMessage(text);
+
+    if (window._useSSE) {
+      sendMessageSSE(text);
+    } else {
+      sendMessageJSON(text);
+    }
+  }
+
+  // ===== Envio JSON (modo padrão) =====
+  async function sendMessageJSON(text) {
     var typingId = appendTypingIndicator();
 
     try {
@@ -155,7 +165,6 @@
       state.history.push({ role: 'assistant', content: data.text || '' });
       if (state.history.length > 12) state.history = state.history.slice(-12);
 
-      // Atualiza lista de sessões na sidebar após cada mensagem
       if (window.Sessions) window.Sessions.refreshList();
 
     } catch (_) {
@@ -167,6 +176,184 @@
       inputField.focus();
       scrollToBottom();
     }
+  }
+
+  // ===== Envio SSE (multi-agente com progresso em tempo real) =====
+  function sendMessageSSE(text) {
+    var progressId = appendProgressIndicator();
+
+    var body = JSON.stringify({
+      message: text,
+      history: state.history,
+      session_id: state.sessionId,
+    });
+
+    fetch('/api/chat/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: body,
+    }).then(function (response) {
+      if (!response.ok) {
+        removeMessage(progressId);
+        var errorMsg = response.status === 429
+          ? 'Muitas perguntas em pouco tempo. Aguarde um momento e tente novamente.'
+          : 'Erro ao processar sua pergunta. Tente novamente.';
+        appendErrorMessage(errorMsg);
+        state.isLoading = false;
+        sendButton.disabled = false;
+        inputField.focus();
+        return;
+      }
+
+      var reader = response.body.getReader();
+      var decoder = new TextDecoder();
+      var buffer = '';
+
+      function processChunk(value) {
+        buffer += decoder.decode(value, { stream: true });
+        var lines = buffer.split('\n');
+        buffer = lines.pop(); // última linha pode estar incompleta
+
+        var eventType = null;
+        var dataLine = null;
+
+        for (var i = 0; i < lines.length; i++) {
+          var line = lines[i];
+          if (line.startsWith('event: ')) {
+            eventType = line.slice(7).trim();
+          } else if (line.startsWith('data: ')) {
+            dataLine = line.slice(6).trim();
+          } else if (line === '') {
+            // Evento completo
+            if (eventType && dataLine) {
+              handleSSEEvent(eventType, dataLine, progressId, text);
+              eventType = null;
+              dataLine = null;
+            }
+          }
+        }
+      }
+
+      function pump() {
+        reader.read().then(function (result) {
+          if (result.done) {
+            state.isLoading = false;
+            sendButton.disabled = false;
+            inputField.focus();
+            return;
+          }
+          processChunk(result.value);
+          pump();
+        }).catch(function () {
+          removeMessage(progressId);
+          appendErrorMessage('Conexão interrompida. Tente novamente.');
+          state.isLoading = false;
+          sendButton.disabled = false;
+          inputField.focus();
+        });
+      }
+
+      pump();
+
+    }).catch(function () {
+      removeMessage(progressId);
+      appendErrorMessage('Não foi possível conectar ao servidor. Verifique sua conexão.');
+      state.isLoading = false;
+      sendButton.disabled = false;
+      inputField.focus();
+    });
+  }
+
+  // ===== Processa evento SSE individual =====
+  function handleSSEEvent(eventType, dataStr, progressId, originalText) {
+    var data = {};
+    try { data = JSON.parse(dataStr); } catch (_) { return; }
+
+    switch (eventType) {
+      case 'searching':
+        updateProgressIndicator(progressId, 'searching', data.message || 'Buscando informações...');
+        break;
+      case 'analyzing':
+        var tablesFound = data.tables_found || 0;
+        var msg = tablesFound > 0
+          ? 'Analisando ' + tablesFound + ' tabela' + (tablesFound > 1 ? 's' : '') + '...'
+          : (data.message || 'Analisando dados...');
+        updateProgressIndicator(progressId, 'analyzing', msg);
+        break;
+      case 'tool_call':
+        updateProgressSubtext(progressId, 'Calculando ' + (data.tool || '') + '...');
+        break;
+      case 'writing':
+        updateProgressIndicator(progressId, 'writing', 'Preparando resposta...');
+        break;
+      case 'done':
+        removeMessage(progressId);
+        appendBotMessage(data);
+        state.history.push({ role: 'user',      content: originalText });
+        state.history.push({ role: 'assistant', content: data.text || '' });
+        if (state.history.length > 12) state.history = state.history.slice(-12);
+        if (window.Sessions) window.Sessions.refreshList();
+        scrollToBottom();
+        break;
+      case 'error':
+        removeMessage(progressId);
+        appendErrorMessage(data.message || 'Erro ao processar sua pergunta. Tente novamente.');
+        break;
+    }
+  }
+
+  // ===== Indicador de progresso SSE =====
+  var _PROGRESS_ICONS = {
+    searching: '<svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>',
+    analyzing: '<svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M3 14h18M10 4v16M14 4v16"/></svg>',
+    writing:   '<svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>',
+  };
+
+  function appendProgressIndicator() {
+    var id = 'progress-' + Date.now();
+    var row = document.createElement('div');
+    row.className = 'flex gap-3.5 items-start message-enter';
+    row.id = id;
+
+    var avatar = document.createElement('div');
+    avatar.className = 'w-10 h-10 rounded-full bg-gradient-to-br from-brand-600 to-brand-400 flex items-center justify-center flex-shrink-0 shadow-lg shadow-brand-600/20 ring-2 ring-white';
+    avatar.innerHTML = ICONS.scale;
+
+    var card = document.createElement('div');
+    card.className = 'bg-white rounded-2xl rounded-tl-none shadow-md shadow-gray-200/60 border border-gray-200 px-4 py-3 min-w-[200px]';
+
+    var inner = document.createElement('div');
+    inner.className = 'progress-indicator';
+    inner.innerHTML = '<div class="progress-step searching">'
+      + _PROGRESS_ICONS.searching
+      + '<span class="progress-label">Buscando informações...</span>'
+      + '</div>'
+      + '<div class="progress-subtext"></div>';
+
+    card.appendChild(inner);
+    row.appendChild(avatar);
+    row.appendChild(card);
+    messagesArea.appendChild(row);
+    scrollToBottom();
+    return id;
+  }
+
+  function updateProgressIndicator(id, step, label) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    var inner = el.querySelector('.progress-indicator');
+    if (!inner) return;
+    var icon = _PROGRESS_ICONS[step] || '';
+    inner.querySelector('.progress-step').className = 'progress-step ' + step;
+    inner.querySelector('.progress-step').innerHTML = icon + '<span class="progress-label">' + Utils.escapeHtml(label) + '</span>';
+    scrollToBottom();
+  }
+
+  function updateProgressSubtext(id, text) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    var subtext = el.querySelector('.progress-subtext');
+    if (subtext) subtext.textContent = text;
   }
 
   // ===== Scroll =====
@@ -291,7 +478,7 @@
       var metricsHtml = Utils.renderMetricsCards(metricsData);
       if (metricsHtml) {
         var metricsWrap = document.createElement('div');
-        metricsWrap.className = 'px-5 pb-2';
+        metricsWrap.className = 'card-section';
         metricsWrap.innerHTML = metricsHtml;
         card.appendChild(metricsWrap);
       }
@@ -300,23 +487,12 @@
     // ── Texto principal (com citações inline) ──
     if (data.text) {
       var boxWrap = document.createElement('div');
-      boxWrap.className = 'px-5 pb-4';
+      boxWrap.className = 'card-section';
       var box = document.createElement('div');
-      box.className = 'content-box bg-surface border border-surface-border/60 rounded-xl p-4 text-sm leading-relaxed text-gray-700';
+      box.className = 'content-box';
       box.innerHTML = Utils.markdownToHtml(data.text, citations);
       boxWrap.appendChild(box);
       card.appendChild(boxWrap);
-    }
-
-    // ── Seção de citações / fontes ──
-    if (citations.length) {
-      var citeHtml = Utils.buildCitationsSection(citations);
-      if (citeHtml) {
-        var citeWrap = document.createElement('div');
-        citeWrap.className = 'px-5 pb-3';
-        citeWrap.innerHTML = citeHtml;
-        card.appendChild(citeWrap);
-      }
     }
 
     // ── Tabelas estruturadas (field tables[]) ──
@@ -324,73 +500,27 @@
       var tablesHtml = Utils.renderTablesSection(tables);
       if (tablesHtml) {
         var tablesWrap = document.createElement('div');
-        tablesWrap.className = 'px-5 pb-3 extracted-content';
+        tablesWrap.className = 'card-section extracted-content';
         tablesWrap.innerHTML = tablesHtml;
         card.appendChild(tablesWrap);
       }
     }
 
-    // ── Links úteis (derivados de sources) ──
-    if (rawSources.length) {
-      var linksSection = document.createElement('div');
-      linksSection.className = 'px-5 pb-4 space-y-1.5';
-
-      var linksLbl = document.createElement('div');
-      linksLbl.className = 'flex items-center gap-1.5 text-xs font-semibold text-gray-500 mb-1';
-      linksLbl.innerHTML = ICONS.link + ' <span>Links úteis</span>';
-      linksSection.appendChild(linksLbl);
-
-      var ul = document.createElement('ul');
-      ul.className = 'space-y-0.5';
-      // Deduplica por URL
-      var seenUrls = {};
-      rawSources.forEach(function (s) {
-        if (!s.document_url || seenUrls[s.document_url]) return;
-        seenUrls[s.document_url] = true;
-        var lk = { title: s.document_title || s.document_url, url: s.document_url, type: 'page' };
-        var li = document.createElement('li');
-        li.appendChild(buildLinkItem(lk));
-        ul.appendChild(li);
-      });
-      linksSection.appendChild(ul);
-      card.appendChild(linksSection);
-    }
-
-    // ── Conteúdo extraído (accordion) — de extracted_content ou snippets de sources ──
-    var extractedContent = data.extracted_content || null;
-    if (!extractedContent && rawSources.length) {
-      var snippets = rawSources
-        .filter(function (s) { return s.snippet && s.snippet.trim(); })
-        .map(function (s) { return s.snippet.trim(); });
-      if (snippets.length) extractedContent = snippets.join('\n\n');
-    }
-    if (extractedContent) {
-      var accWrap = document.createElement('div');
-      accWrap.className = 'px-5 pb-4';
-
-      var accordion = document.createElement('div');
-      accordion.className = 'accordion border border-gray-200 rounded-xl overflow-hidden';
-
-      var toggle = document.createElement('button');
-      toggle.type = 'button';
-      toggle.className = 'w-full bg-gray-50 hover:bg-gray-100 px-4 py-3 flex items-center justify-between text-sm font-medium text-brand-600 cursor-pointer transition-colors duration-150';
-      toggle.innerHTML = '<span class="flex items-center gap-2">' + ICONS.search + ' Ver conteúdo da página</span>' + ICONS.chevronDown;
-      toggle.addEventListener('click', function () { accordion.classList.toggle('open'); });
-
-      var body = document.createElement('div');
-      body.className = 'accordion-body extracted-content text-sm leading-relaxed text-gray-600 border-t border-gray-200 bg-white break-words';
-      body.innerHTML = Utils.formatExtractedContent(extractedContent);
-
-      accordion.appendChild(toggle);
-      accordion.appendChild(body);
-      accWrap.appendChild(accordion);
-      card.appendChild(accWrap);
+    // ── Seção de citações / fontes (após tabelas) ──
+    if (citations.length) {
+      var citeHtml = Utils.buildCitationsSection(citations);
+      if (citeHtml) {
+        var citeWrap = document.createElement('div');
+        citeWrap.className = 'card-section';
+        citeWrap.innerHTML = citeHtml;
+        card.appendChild(citeWrap);
+      }
     }
 
     // ── Sugestões ──
     if (data.suggestions && data.suggestions.length) {
       var sugDiv = document.createElement('div');
-      sugDiv.className = 'px-5 pb-3 flex flex-wrap gap-2';
+      sugDiv.className = 'card-section suggestions-wrap';
       data.suggestions.forEach(function (s) { sugDiv.appendChild(createChip(s)); });
       card.appendChild(sugDiv);
     }

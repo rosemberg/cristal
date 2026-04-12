@@ -98,5 +98,29 @@ class CsvProcessor:
             )
             return sheets
         if doc_type == "csv":
-            return {"Sheet1": pd.read_csv(buf)}
+            best_df: pd.DataFrame | None = None
+            best_cols = 0
+            for encoding in ("utf-8", "latin-1", "cp1252"):
+                for sep in (",", ";", "\t"):
+                    buf.seek(0)
+                    try:
+                        df = pd.read_csv(
+                            buf,
+                            encoding=encoding,
+                            sep=sep,
+                            on_bad_lines="skip",
+                            dtype=str,
+                        )
+                        # A valid parse must produce at least 2 columns with non-empty headers.
+                        ncols = len([c for c in df.columns if str(c).strip()])
+                        if not df.empty and ncols > best_cols:
+                            best_df = df
+                            best_cols = ncols
+                    except (UnicodeDecodeError, pd.errors.ParserError, pd.errors.EmptyDataError):
+                        continue
+            if best_df is not None and best_cols > 1:
+                return {"Sheet1": best_df}
+            # Fallback: latin-1 + semicolon
+            buf.seek(0)
+            return {"Sheet1": pd.read_csv(buf, encoding="latin-1", sep=";", on_bad_lines="skip", dtype=str)}
         raise ValueError(f"Unsupported tabular format: {doc_type!r}")

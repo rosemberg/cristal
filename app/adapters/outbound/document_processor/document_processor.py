@@ -9,6 +9,7 @@ from __future__ import annotations
 from app.adapters.outbound.document_processor.chunker import TextChunker
 from app.adapters.outbound.document_processor.csv_processor import CsvProcessor
 from app.adapters.outbound.document_processor.pdf_processor import PdfProcessor
+from app.adapters.outbound.document_processor.semantic_chunker import SemanticChunker
 from app.domain.ports.outbound.document_process_gateway import DocumentProcessGateway
 from app.domain.ports.outbound.document_repository import ProcessedDocument
 
@@ -19,9 +20,9 @@ class DocumentProcessor(DocumentProcessGateway):
     """Dispatches processing to PdfProcessor or CsvProcessor."""
 
     def __init__(self, chunk_size: int = 500, overlap: int = 50) -> None:
-        chunker = TextChunker(chunk_size=chunk_size, overlap=overlap)
-        self._pdf = PdfProcessor(chunker)
-        self._csv = CsvProcessor(chunker)
+        # PDF usa SemanticChunker (Fase 4); CSV/XLSX mantém TextChunker (estrutura tabular)
+        self._pdf = PdfProcessor(SemanticChunker())
+        self._csv = CsvProcessor(TextChunker(chunk_size=chunk_size, overlap=overlap))
 
     async def process(
         self, url: str, content: bytes, doc_type: str

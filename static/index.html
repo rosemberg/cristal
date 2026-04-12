@@ -409,13 +409,24 @@
 <!-- /APP SHELL -->
 
 <!-- Ordem: utils → api → sessions → documents → map → analytics → app → chat -->
-<script src="/static/js/utils.js?v=15"></script>
-<script src="/static/js/api.js?v=15"></script>
-<script src="/static/js/sessions.js?v=15"></script>
-<script src="/static/js/documents.js?v=15"></script>
-<script src="/static/js/map.js?v=15"></script>
-<script src="/static/js/analytics.js?v=15"></script>
-<script src="/static/js/app.js?v=15"></script>
-<script src="/static/js/chat.js?v=15"></script>
+<script src="/static/js/utils.js?v=16"></script>
+<script src="/static/js/api.js?v=16"></script>
+<script src="/static/js/sessions.js?v=16"></script>
+<script src="/static/js/documents.js?v=16"></script>
+<script src="/static/js/map.js?v=16"></script>
+<script src="/static/js/analytics.js?v=16"></script>
+<script src="/static/js/app.js?v=16"></script>
+<script src="/static/js/chat.js?v=16"></script>
+<script>
+  // Detecta suporte a SSE consultando /api/health (sse_enabled = use_multi_agent + sse_enabled)
+  window._useSSE = false;
+  fetch('/api/health').then(function (r) {
+    return r.json();
+  }).then(function (data) {
+    window._useSSE = !!(data && data.stats && data.stats.sse_enabled);
+  }).catch(function () {
+    window._useSSE = false;
+  });
+</script>
 </body>
 </html>

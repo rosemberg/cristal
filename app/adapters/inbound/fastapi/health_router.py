@@ -48,6 +48,12 @@ async def health_check(request: Request) -> HealthResponse:
 
     status = "healthy" if db_connected else "degraded"
 
+    # Expõe flags de feature para o frontend
+    sse_enabled = getattr(settings, "sse_enabled", False) if settings else False
+    use_multi_agent = getattr(settings, "use_multi_agent", False) if settings else False
+    stats = dict(stats)
+    stats["sse_enabled"] = sse_enabled and use_multi_agent
+
     return HealthResponse(
         status=status,
         version=_VERSION,

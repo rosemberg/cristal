@@ -57,10 +57,24 @@ class DocumentRepository(ABC):
     ) -> None: ...
 
     @abstractmethod
-    async def list_pending(self, limit: int = 50) -> list[Document]: ...
+    async def list_pending(self, limit: int = 0) -> list[Document]:
+        """Lista documentos pendentes. limit=0 retorna todos."""
+        ...
 
     @abstractmethod
     async def list_errors(self) -> list[Document]: ...
+
+    @abstractmethod
+    async def reset_stuck_processing(self, stuck_minutes: int = 30) -> int:
+        """Reseta documentos presos em 'processing' para 'pending'.
+
+        Args:
+            stuck_minutes: threshold de tempo; 0 reseta todos em 'processing'.
+
+        Returns:
+            Número de documentos resetados.
+        """
+        ...
 
     @abstractmethod
     async def update_status(

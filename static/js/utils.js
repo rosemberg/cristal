@@ -143,7 +143,8 @@
   /* Renderiza seção "Fontes" numerada a partir de citations[] */
   function buildCitationsSection(citations) {
     if (!citations || !citations.length) return '';
-    var html = '<div class="citations-section"><p class="citations-label">Fontes</p><ol class="citations-list">';
+    var sourceIcon = '<svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="display:inline-block;vertical-align:middle;margin-right:5px;flex-shrink:0"><path stroke-linecap="round" stroke-linejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/></svg>';
+    var html = '<div class="citations-section"><p class="citations-label">' + sourceIcon + 'FONTES</p><ol class="citations-list">';
     citations.forEach(function (c, i) {
       html += '<li id="cite-' + (i + 1) + '" class="citation-item">';
       if (c.url) {

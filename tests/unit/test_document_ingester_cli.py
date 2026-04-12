@@ -160,39 +160,43 @@ class TestDocumentIngesterCLIRun:
         self, capsys: pytest.CaptureFixture[str]
     ) -> None:
         ing = AsyncMock()
+        ing.get_status = AsyncMock(return_value=make_ingestion_status())
         ing.ingest_pending = AsyncMock(return_value=make_ingestion_stats())
         cli = make_cli(ingestion_service=ing)
 
         await cli.run()
 
-        ing.ingest_pending.assert_awaited_once_with(concurrency=3)
+        ing.ingest_pending.assert_awaited_once_with(concurrency=3, on_progress=ANY)
 
     @pytest.mark.asyncio
     async def test_run_calls_ingest_pending_with_custom_concurrency(
         self, capsys: pytest.CaptureFixture[str]
     ) -> None:
         ing = AsyncMock()
+        ing.get_status = AsyncMock(return_value=make_ingestion_status())
         ing.ingest_pending = AsyncMock(return_value=make_ingestion_stats())
         cli = make_cli(ingestion_service=ing)
 
         await cli.run(concurrency=5)
 
-        ing.ingest_pending.assert_awaited_once_with(concurrency=5)
+        ing.ingest_pending.assert_awaited_once_with(concurrency=5, on_progress=ANY)
 
     @pytest.mark.asyncio
     async def test_run_prints_header(self, capsys: pytest.CaptureFixture[str]) -> None:
         ing = AsyncMock()
+        ing.get_status = AsyncMock(return_value=make_ingestion_status())
         ing.ingest_pending = AsyncMock(return_value=make_ingestion_stats())
         cli = make_cli(ingestion_service=ing)
 
         await cli.run()
 
-        out = capsys.readouterr().out
-        assert "Ingestão de Documentos" in out
+        err = capsys.readouterr().err
+        assert "Ingestão" in err
 
     @pytest.mark.asyncio
     async def test_run_prints_result_summary(self, capsys: pytest.CaptureFixture[str]) -> None:
         ing = AsyncMock()
+        ing.get_status = AsyncMock(return_value=make_ingestion_status())
         stats = make_ingestion_stats(
             total=122, processed=118, errors=4,
             duration_seconds=272.0, inconsistencies_found=4,
@@ -202,37 +206,39 @@ class TestDocumentIngesterCLIRun:
 
         await cli.run()
 
-        out = capsys.readouterr().out
-        assert "118" in out  # processados
-        assert "4" in out    # erros
-        assert "122" in out  # total
+        err = capsys.readouterr().err
+        assert "118" in err  # processados
+        assert "4" in err    # erros
+        assert "122" in err  # total
 
     @pytest.mark.asyncio
     async def test_run_prints_inconsistencies_count(
         self, capsys: pytest.CaptureFixture[str]
     ) -> None:
         ing = AsyncMock()
+        ing.get_status = AsyncMock(return_value=make_ingestion_status())
         stats = make_ingestion_stats(inconsistencies_found=4)
         ing.ingest_pending = AsyncMock(return_value=stats)
         cli = make_cli(ingestion_service=ing)
 
         await cli.run()
 
-        out = capsys.readouterr().out
-        assert "nconsistên" in out  # "Inconsistências" or "inconsistências"
+        err = capsys.readouterr().err
+        assert "nconsistên" in err  # "Inconsistências" or "inconsistências"
 
     @pytest.mark.asyncio
     async def test_run_prints_duration(self, capsys: pytest.CaptureFixture[str]) -> None:
         ing = AsyncMock()
+        ing.get_status = AsyncMock(return_value=make_ingestion_status())
         stats = make_ingestion_stats(duration_seconds=272.0)
         ing.ingest_pending = AsyncMock(return_value=stats)
         cli = make_cli(ingestion_service=ing)
 
         await cli.run()
 
-        out = capsys.readouterr().out
+        err = capsys.readouterr().err
         # Deve mostrar duração em algum formato (ex: "4m 32s" ou "272s")
-        assert "m" in out or "s" in out
+        assert "m" in err or "s" in err
 
 
 # ── Testes: reprocess ─────────────────────────────────────────────────────────
@@ -244,25 +250,27 @@ class TestDocumentIngesterCLIReprocess:
         self, capsys: pytest.CaptureFixture[str]
     ) -> None:
         ing = AsyncMock()
+        ing.get_status = AsyncMock(return_value=make_ingestion_status())
         ing.reprocess_errors = AsyncMock(return_value=make_ingestion_stats(total=4, processed=3, errors=1))
         cli = make_cli(ingestion_service=ing)
 
         await cli.reprocess()
 
-        ing.reprocess_errors.assert_awaited_once()
+        ing.reprocess_errors.assert_awaited_once_with(on_progress=ANY)
 
     @pytest.mark.asyncio
     async def test_reprocess_prints_result(self, capsys: pytest.CaptureFixture[str]) -> None:
         ing = AsyncMock()
+        ing.get_status = AsyncMock(return_value=make_ingestion_status())
         stats = make_ingestion_stats(total=4, processed=3, errors=1)
         ing.reprocess_errors = AsyncMock(return_value=stats)
         cli = make_cli(ingestion_service=ing)
 
         await cli.reprocess()
 
-        out = capsys.readouterr().out
-        assert "3" in out
-        assert "eprocess" in out.lower() or "Reprocessamento" in out
+        err = capsys.readouterr().err
+        assert "3" in err
+        assert "eprocess" in err.lower() or "Reprocessamento" in err
 
 
 # ── Testes: status ────────────────────────────────────────────────────────────
@@ -694,25 +702,25 @@ class TestMainArgparse:
 
 class TestFormatDuration:
     def test_format_under_60_seconds(self) -> None:
-        from app.adapters.inbound.cli.document_ingester import _format_duration
+        from app.adapters.inbound.cli.progress import format_duration
 
-        assert "45s" in _format_duration(45.0)
+        assert "45s" in format_duration(45.0)
 
     def test_format_minutes_and_seconds(self) -> None:
-        from app.adapters.inbound.cli.document_ingester import _format_duration
+        from app.adapters.inbound.cli.progress import format_duration
 
-        result = _format_duration(272.0)
+        result = format_duration(272.0)
         assert "4m" in result
         assert "32s" in result
 
     def test_format_exact_minute(self) -> None:
-        from app.adapters.inbound.cli.document_ingester import _format_duration
+        from app.adapters.inbound.cli.progress import format_duration
 
-        result = _format_duration(60.0)
+        result = format_duration(60.0)
         assert "1m" in result
 
     def test_format_hours(self) -> None:
-        from app.adapters.inbound.cli.document_ingester import _format_duration
+        from app.adapters.inbound.cli.progress import format_duration
 
-        result = _format_duration(3661.0)
+        result = format_duration(3661.0)
         assert "1h" in result

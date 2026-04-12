@@ -7,11 +7,14 @@ for valid PDFs.
 
 from __future__ import annotations
 
+import io
 import logging
 
 import fitz
+import pytesseract
+from PIL import Image
 
-from app.adapters.outbound.document_processor.chunker import TextChunker
+from app.adapters.outbound.document_processor.semantic_chunker import SemanticChunker
 from app.domain.entities.chunk import DocumentChunk
 from app.domain.entities.document_table import DocumentTable
 from app.domain.ports.outbound.document_process_gateway import DocumentProcessingError
@@ -23,8 +26,19 @@ logger = logging.getLogger(__name__)
 class PdfProcessor:
     """Processes PDF bytes into a ProcessedDocument."""
 
-    def __init__(self, chunker: TextChunker) -> None:
+    def __init__(self, chunker: SemanticChunker) -> None:
         self._chunker = chunker
+
+    @staticmethod
+    def _ocr_page(page: fitz.Page) -> str:
+        """Fallback OCR para páginas escaneadas (sem camada de texto)."""
+        try:
+            pix = page.get_pixmap(dpi=300)
+            img = Image.open(io.BytesIO(pix.tobytes("png")))
+            return pytesseract.image_to_string(img, lang="por")
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("OCR falhou na página: %s", exc)
+            return ""
 
     def process(self, content: bytes, document_url: str) -> ProcessedDocument:
         """Extract text, chunks, and tables from PDF bytes.
@@ -52,13 +66,15 @@ class PdfProcessor:
 
         for page_num, page in enumerate(doc, start=1):
             page_text: str = page.get_text()
+            if not page_text.strip():
+                page_text = self._ocr_page(page)
             if page_text.strip():
                 text_parts.append(page_text)
-                page_chunks = self._chunker.chunk(
+                page_chunks = self._chunker.chunk_plain_text(
                     text=page_text,
                     document_url=document_url,
                     page_number=page_num,
-                    start_chunk_index=len(all_chunks),
+                    start_index=len(all_chunks),
                 )
                 all_chunks.extend(page_chunks)
 

@@ -48,7 +48,7 @@ class AnalysisResult:
 
     selected_tables: list[DocumentTable]
     computed_metrics: list[ToolResult]
-    relevant_chunks: list[str]          # trechos textuais selecionados
+    relevant_chunks: list[ChunkMatch]   # chunks selecionados (com título e URL)
     data_summary: str                   # resumo gerado pelo DataAgent para o Writer
     tool_calls_log: list[dict[str, Any]] = field(default_factory=list)  # auditoria
 
@@ -228,11 +228,8 @@ class DataAgent:
             tables[i] for i in selected_table_indices if i < len(tables)
         ]
 
-        # Chunks relevantes: top-3 com maior score
-        relevant_chunks = [
-            cm.chunk.text
-            for cm in sorted(chunks, key=lambda c: c.score, reverse=True)[:3]
-        ]
+        # Chunks relevantes: top-3 com maior score (preserva ChunkMatch para citações)
+        relevant_chunks = sorted(chunks, key=lambda c: c.score, reverse=True)[:3]
 
         return AnalysisResult(
             selected_tables=selected_tables,
