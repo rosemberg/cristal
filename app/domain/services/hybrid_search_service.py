@@ -233,12 +233,21 @@ class HybridSearchService(SearchRepository):
     # ── Helpers internos ──────────────────────────────────────────────────────
 
     async def _semantic_chunks(self, query: str, top_k: int) -> list[SemanticMatch]:
-        """Tenta busca semântica de chunks; retorna [] se gateway indisponível."""
+        """Tenta busca semântica de chunks + page_chunks + synthetic_queries.
+
+        Retorna [] se gateway indisponível.
+        """
         if self._embedding_gw is None:
             return []
         try:
             embedding = await self._embedding_gw.embed_text(query, task_type="RETRIEVAL_QUERY")
-            return await self._repo.search_semantic(embedding, source_type="chunk", top_k=top_k)
+            # Busca em paralelo: document_chunks, page_chunks e via perguntas sintéticas
+            doc_chunks, page_chunks, sq_chunks = await asyncio.gather(
+                self._repo.search_semantic(embedding, source_type="chunk", top_k=top_k),
+                self._repo.search_semantic(embedding, source_type="page_chunk", top_k=top_k),
+                self._repo.search_semantic(embedding, source_type="synthetic_query", top_k=top_k),
+            )
+            return doc_chunks + page_chunks + sq_chunks
         except EmbeddingUnavailableError:
             logger.info("HybridSearch: EmbeddingGateway indisponível — usando apenas FTS para chunks.")
             return []

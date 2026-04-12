@@ -286,6 +286,8 @@ class PostgresSearchRepository(SearchRepository):
             return await self._search_semantic_pages(vec_str, model_name, top_k, filters)
         if source_type == "page_chunk":
             return await self._search_semantic_page_chunks(vec_str, model_name, top_k)
+        if source_type == "synthetic_query":
+            return await self._search_via_synthetic_queries(vec_str, model_name, top_k)
         logger.warning("search_semantic: source_type desconhecido '%s'", source_type)
         return []
 
@@ -446,6 +448,160 @@ class PostgresSearchRepository(SearchRepository):
                     similarity=float(r["similarity"]),
                     document_url=r["page_url"],
                     document_title=r["page_title"],
+                    chunk=chunk,
+                )
+            )
+        return results
+
+    async def _search_via_synthetic_queries(
+        self,
+        vec_str: str,
+        model_name: str,
+        top_k: int,
+    ) -> list[SemanticMatch]:
+        """Busca semântica via perguntas sintéticas → resolve para chunk original.
+
+        Fluxo:
+        1. Encontra embeddings com source_type='synthetic_query' mais similares
+        2. Resolve synthetic_query.source_id → chunk original (page_chunk ou chunk)
+        3. Retorna ChunkMatch com o chunk original (não a pergunta)
+        """
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT
+                    1 - (e.embedding <=> $1::vector) AS similarity,
+                    sq.source_type  AS orig_source_type,
+                    sq.source_id    AS orig_source_id
+
+                FROM embeddings e
+                JOIN synthetic_queries sq ON sq.id = e.source_id
+
+                WHERE e.source_type = 'synthetic_query'
+                  AND e.model_name  = $2
+
+                ORDER BY e.embedding <=> $1::vector
+                LIMIT $3
+                """,
+                vec_str,
+                model_name,
+                top_k * 3,  # busca mais para compensar deduplicação posterior
+            )
+
+        if not rows:
+            return []
+
+        # Agrupa por orig_source_type para resolver em batches
+        page_chunk_ids: list[tuple[int, float]] = []   # (id, similarity)
+        doc_chunk_ids: list[tuple[int, float]] = []
+
+        seen: set[tuple[str, int]] = set()
+        for r in rows:
+            key = (r["orig_source_type"], r["orig_source_id"])
+            if key in seen:
+                continue
+            seen.add(key)
+            if r["orig_source_type"] == "page_chunk":
+                page_chunk_ids.append((r["orig_source_id"], float(r["similarity"])))
+            elif r["orig_source_type"] == "chunk":
+                doc_chunk_ids.append((r["orig_source_id"], float(r["similarity"])))
+
+        results: list[SemanticMatch] = []
+
+        if page_chunk_ids:
+            results.extend(
+                await self._resolve_page_chunks(page_chunk_ids[:top_k])
+            )
+        if doc_chunk_ids:
+            results.extend(
+                await self._resolve_doc_chunks(doc_chunk_ids[:top_k])
+            )
+
+        results.sort(key=lambda m: m.similarity, reverse=True)
+        return results[:top_k]
+
+    async def _resolve_page_chunks(
+        self, id_scores: list[tuple[int, float]]
+    ) -> list[SemanticMatch]:
+        if not id_scores:
+            return []
+        ids = [x[0] for x in id_scores]
+        score_map = {x[0]: x[1] for x in id_scores}
+
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT pc.id, pc.page_url, pc.chunk_index, pc.chunk_text,
+                       pc.token_count, p.title AS page_title
+                FROM page_chunks pc
+                JOIN pages p ON p.id = pc.page_id
+                WHERE pc.id = ANY($1::int[])
+                """,
+                ids,
+            )
+
+        results: list[SemanticMatch] = []
+        for r in rows:
+            chunk = DocumentChunk(
+                id=-r["id"],
+                document_url=r["page_url"],
+                chunk_index=r["chunk_index"],
+                text=r["chunk_text"],
+                token_count=r["token_count"] or 0,
+                section_title=None,
+                page_number=None,
+            )
+            results.append(
+                SemanticMatch(
+                    source_id=-r["id"],
+                    source_type="page_chunk",
+                    similarity=score_map.get(r["id"], 0.0),
+                    document_url=r["page_url"],
+                    document_title=r["page_title"],
+                    chunk=chunk,
+                )
+            )
+        return results
+
+    async def _resolve_doc_chunks(
+        self, id_scores: list[tuple[int, float]]
+    ) -> list[SemanticMatch]:
+        if not id_scores:
+            return []
+        ids = [x[0] for x in id_scores]
+        score_map = {x[0]: x[1] for x in id_scores}
+
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT dc.id, dc.document_url, dc.chunk_index, dc.chunk_text,
+                       dc.token_count, dc.section_title, dc.page_number,
+                       COALESCE(cont.document_title, dc.document_url) AS doc_title
+                FROM document_chunks dc
+                JOIN document_contents cont ON cont.document_url = dc.document_url
+                WHERE dc.id = ANY($1::int[])
+                """,
+                ids,
+            )
+
+        results: list[SemanticMatch] = []
+        for r in rows:
+            chunk = DocumentChunk(
+                id=r["id"],
+                document_url=r["document_url"],
+                chunk_index=r["chunk_index"],
+                text=r["chunk_text"],
+                token_count=r["token_count"] or 0,
+                section_title=r["section_title"],
+                page_number=r["page_number"],
+            )
+            results.append(
+                SemanticMatch(
+                    source_id=r["id"],
+                    source_type="chunk",
+                    similarity=score_map.get(r["id"], 0.0),
+                    document_url=r["document_url"],
+                    document_title=r["doc_title"],
                     chunk=chunk,
                 )
             )
