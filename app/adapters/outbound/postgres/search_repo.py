@@ -38,6 +38,19 @@ _QUERY_STOPWORDS = {
     "este", "esta", "estes", "estas", "aquele", "aquela", "aqueles",
     "aquelas", "isso", "isto", "aquilo", "foram", "foram", "sido",
     "sendo", "está", "estão", "são", "era", "eram",
+    # Verbos de comando/imperativo frequentes em perguntas ao chatbot
+    # (ao serem stemados pelo dicionário português, geram tokens raros como
+    # 'list', 'mostr', 'apresent' que não existem nos documentos indexados,
+    # fazendo a query AND retornar zero resultados)
+    "liste", "listar", "mostre", "mostrar", "apresente",
+    "apresentar", "informe", "informar", "busque", "buscar",
+    "encontre", "encontrar", "traga", "trazer", "diga", "dizer",
+    "me", "mim", "meu", "minha", "meus", "minhas",
+    # Artigos e preposições portuguesas — irrelevantes para busca ILIKE
+    # em search_tables (WHERE col ILIKE '%de%' retorna quase tudo)
+    "os", "as", "de", "do", "da", "dos", "das", "ao", "aos",
+    "à", "às", "no", "na", "nos", "nas", "em", "um", "uma",
+    "uns", "umas", "o", "a", "e",
 }
 
 _PUNCTUATION_RE = re.compile(r"[^\w\s]", re.UNICODE)
@@ -77,11 +90,19 @@ def _record_to_page(row: asyncpg.Record) -> Page:
     )
 
 
+_YEAR_RE = re.compile(r"\b(20\d{2})\b")
+
+
 class PostgresSearchRepository(SearchRepository):
     """Busca full-text contra pages e document_chunks via asyncpg."""
 
-    def __init__(self, pool: asyncpg.Pool) -> None:
+    def __init__(
+        self,
+        pool: asyncpg.Pool,
+        embedding_model_name: str = "gemini-embedding-001",
+    ) -> None:
         self._pool = pool
+        self._embedding_model_name = embedding_model_name
 
     async def search_pages(self, query: str, top_k: int = 5) -> list[PageMatch]:
         cleaned = _clean_query(query)
@@ -118,21 +139,63 @@ class PostgresSearchRepository(SearchRepository):
         if not cleaned:
             return []
         logger.debug("search_chunks cleaned query: %r -> %r", query, cleaned)
+
+        # Extrai anos presentes na query para busca complementar por document_url
+        years = _YEAR_RE.findall(query)
+        url_patterns = [f"%{y}%" for y in years]
+
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
                 """
-                SELECT dc.*,
-                       ts_rank(dc.search_vector, q) AS rank,
-                       COALESCE(cont.document_title, dc.document_url) AS doc_title
-                FROM document_chunks dc
-                JOIN document_contents cont ON cont.document_url = dc.document_url,
-                     plainto_tsquery('cristal_pt', $1) q
-                WHERE dc.search_vector @@ q
-                ORDER BY rank DESC
+                SELECT sub.id, sub.document_url, sub.chunk_index, sub.chunk_text,
+                       sub.token_count, sub.section_title, sub.page_number,
+                       sub.rank, sub.doc_title
+                FROM (
+                    -- FTS em document_chunks
+                    SELECT dc.id, dc.document_url, dc.chunk_index, dc.chunk_text,
+                           dc.token_count, dc.section_title, dc.page_number,
+                           ts_rank(dc.search_vector, q) AS rank,
+                           COALESCE(cont.document_title, dc.document_url) AS doc_title
+                    FROM document_chunks dc
+                    JOIN document_contents cont ON cont.document_url = dc.document_url,
+                         plainto_tsquery('cristal_pt', $1) q
+                    WHERE dc.search_vector @@ q
+
+                    UNION
+
+                    -- Match por ano/termo na URL do documento (ex: "contrato-20-2025")
+                    SELECT dc.id, dc.document_url, dc.chunk_index, dc.chunk_text,
+                           dc.token_count, dc.section_title, dc.page_number,
+                           0.05 AS rank,
+                           COALESCE(cont.document_title, dc.document_url) AS doc_title
+                    FROM document_chunks dc
+                    JOIN document_contents cont ON cont.document_url = dc.document_url
+                    WHERE cardinality($3::text[]) > 0
+                      AND EXISTS (
+                          SELECT 1 FROM unnest($3::text[]) AS pat
+                          WHERE dc.document_url ILIKE pat
+                      )
+
+                    UNION
+
+                    -- FTS em page_chunks (conteúdo direto de páginas)
+                    -- IDs negativos para evitar colisão com document_chunks no RRF
+                    SELECT -pc.id AS id, pc.page_url AS document_url,
+                           pc.chunk_index, pc.chunk_text,
+                           pc.token_count, NULL AS section_title, NULL AS page_number,
+                           ts_rank(pc.search_vector, q) AS rank,
+                           p.title AS doc_title
+                    FROM page_chunks pc
+                    JOIN pages p ON p.id = pc.page_id,
+                         plainto_tsquery('cristal_pt', $1) q
+                    WHERE pc.search_vector @@ q
+                ) sub
+                ORDER BY sub.rank DESC
                 LIMIT $2
                 """,
                 cleaned,
                 top_k,
+                url_patterns,
             )
         return [
             ChunkMatch(
@@ -156,16 +219,25 @@ class PostgresSearchRepository(SearchRepository):
         cleaned = _clean_query(query)
         if not cleaned:
             return []
-        # Busca tabelas cujo conteúdo (headers, rows, caption, document_url)
-        # contenha QUALQUER dos termos relevantes da query.
-        words = cleaned.split()
-        conditions = " OR ".join(
-            f"COALESCE(search_text, '') ILIKE ${i} "
-            f"OR COALESCE(caption, '') ILIKE ${i} "
-            f"OR headers::text ILIKE ${i} "
-            f"OR rows::text ILIKE ${i} "
-            f"OR document_url ILIKE ${i}"
-            for i in range(1, len(words) + 1)
+        words = [w for w in cleaned.split() if len(w) >= 3]
+        if not words:
+            return []
+
+        # Cada termo deve aparecer em PELO MENOS UMA das colunas da tabela
+        # (AND entre termos, OR entre colunas de cada termo).
+        # Isso evita falso-positivos gerados por palavras genéricas como
+        # "os" ou "de" que existem como substring em quase toda URL/linha.
+        def term_condition(param_idx: int) -> str:
+            return (
+                f"(COALESCE(search_text, '') ILIKE ${param_idx} "
+                f"OR COALESCE(caption, '') ILIKE ${param_idx} "
+                f"OR headers::text ILIKE ${param_idx} "
+                f"OR rows::text ILIKE ${param_idx} "
+                f"OR document_url ILIKE ${param_idx})"
+            )
+
+        conditions = " AND ".join(
+            term_condition(i) for i in range(1, len(words) + 1)
         )
         patterns = [f"%{w}%" for w in words]
         async with self._pool.acquire() as conn:
@@ -206,12 +278,14 @@ class PostgresSearchRepository(SearchRepository):
             return []
 
         vec_str = "[" + ",".join(repr(x) for x in query_embedding) + "]"
-        model_name = "text-embedding-005"
+        model_name = self._embedding_model_name
 
         if source_type == "chunk":
             return await self._search_semantic_chunks(vec_str, model_name, top_k, filters)
         if source_type == "page":
             return await self._search_semantic_pages(vec_str, model_name, top_k, filters)
+        if source_type == "page_chunk":
+            return await self._search_semantic_page_chunks(vec_str, model_name, top_k)
         logger.warning("search_semantic: source_type desconhecido '%s'", source_type)
         return []
 
@@ -319,6 +393,60 @@ class PostgresSearchRepository(SearchRepository):
                     document_url=page.url,
                     document_title=page.title,
                     page=page,
+                )
+            )
+        return results
+
+    async def _search_semantic_page_chunks(
+        self,
+        vec_str: str,
+        model_name: str,
+        top_k: int,
+    ) -> list[SemanticMatch]:
+        """Busca semântica em page_chunks via cosine similarity."""
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT e.source_id,
+                       1 - (e.embedding <=> $1::vector) AS similarity,
+                       pc.id            AS chunk_id,
+                       pc.page_url,
+                       pc.chunk_index,
+                       pc.chunk_text,
+                       pc.token_count,
+                       p.title          AS page_title
+                FROM embeddings e
+                JOIN page_chunks pc ON pc.id = e.source_id
+                JOIN pages p ON p.id = pc.page_id
+                WHERE e.source_type = 'page_chunk'
+                  AND e.model_name  = $2
+                ORDER BY e.embedding <=> $1::vector
+                LIMIT $3
+                """,
+                vec_str,
+                model_name,
+                top_k,
+            )
+        results: list[SemanticMatch] = []
+        for r in rows:
+            # IDs negativos para evitar colisão com document_chunks no RRF
+            chunk = DocumentChunk(
+                id=-r["chunk_id"],
+                document_url=r["page_url"],
+                chunk_index=r["chunk_index"],
+                text=r["chunk_text"],
+                token_count=r["token_count"] or 0,
+                section_title=None,
+                page_number=None,
+            )
+            results.append(
+                SemanticMatch(
+                    source_id=-r["chunk_id"],
+                    source_type="page_chunk",
+                    similarity=float(r["similarity"]),
+                    document_url=r["page_url"],
+                    document_title=r["page_title"],
+                    chunk=chunk,
                 )
             )
         return results
