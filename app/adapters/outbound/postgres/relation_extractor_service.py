@@ -91,3 +91,23 @@ class PostgresRelationExtractorService(RelationExtractor):
                 "SELECT id FROM pages WHERE url LIKE '%' || $1 LIMIT 1", url
             )
         return row["id"] if row else None
+
+    async def _fetch_page_links(self, source_url: str) -> list[dict]:
+        """Retorna os links extraídos pelo crawler para a página dada.
+
+        Faz LEFT JOIN com pages pra obter o target_page_id quando o link
+        aponta para uma página também crawleada.
+        """
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT pl.target_url,
+                       p.id AS target_page_id,
+                       pl.link_title
+                FROM page_links pl
+                LEFT JOIN pages p ON p.url = pl.target_url
+                WHERE pl.source_url = $1
+                """,
+                source_url,
+            )
+        return [dict(r) for r in rows]

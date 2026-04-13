@@ -10,13 +10,12 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
-import os
 
-import asyncpg
-
+from app.adapters.outbound.postgres.connection import DatabasePool, get_pool
 from app.adapters.outbound.postgres.relation_extractor_service import (
     PostgresRelationExtractorService,
 )
+from app.config.settings import get_settings
 from app.domain.value_objects.document_relation import RelationExtractionResult
 
 logging.basicConfig(
@@ -42,8 +41,10 @@ def _print_result(result: RelationExtractionResult) -> None:
 
 
 async def _run(args: argparse.Namespace) -> None:
-    dsn = os.environ.get("DATABASE_URL", "postgresql://cristal:cristal@localhost:5432/cristal")
-    pool = await asyncpg.create_pool(dsn, min_size=2, max_size=5)
+    settings = get_settings()
+    db = DatabasePool(settings)
+    await db.__aenter__()
+    pool = get_pool(db)
     service = PostgresRelationExtractorService(pool)
 
     try:
@@ -88,7 +89,7 @@ async def _run(args: argparse.Namespace) -> None:
         _print_result(combined)
 
     finally:
-        await pool.close()
+        await db.__aexit__(None, None, None)
 
 
 def main() -> None:

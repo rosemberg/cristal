@@ -164,15 +164,15 @@ async def rechunk_pages(
     for row in rows:
         page_id = row["page_id"]
         url = row["url"]
-        html = row["main_content"]
+        content = row["main_content"]  # texto puro, não HTML
         breadcrumb_list = list(row["breadcrumb"]) if row["breadcrumb"] else []
         breadcrumb = " > ".join(breadcrumb_list) if breadcrumb_list else None
         old_count = int(row["chunk_count"])
         result.chunks_before += old_count
 
         try:
-            new_chunks = chunker.chunk_html(
-                html=html,
+            new_chunks = chunker.chunk_plain_text(
+                text=content,
                 document_url=url,
                 breadcrumb=breadcrumb,
             )

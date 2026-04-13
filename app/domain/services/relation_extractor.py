@@ -189,35 +189,41 @@ class RelationExtractor:
     async def _build_link_relations(
         self, page: dict, base_domain: str
     ) -> list[DocumentRelation]:
-        """Extrai URLs do main_content e cria relações 'referencia'."""
-        content: str = page.get("main_content") or ""
+        """Cria relações 'referencia' a partir da tabela page_links já populada
+        pelo crawler. Evita re-parsear texto (main_content é texto puro, sem HTML).
+        """
         source_id: int = page["id"]
+        source_url: str = page["url"]
 
-        # Extrai hrefs via regex simples (BeautifulSoup seria overkill no domain)
-        urls = re.findall(r'href=["\']([^"\']+)["\']', content, re.IGNORECASE)
+        link_rows = await self._fetch_page_links(source_url)
         relations: list[DocumentRelation] = []
 
-        for url in urls:
-            parsed = urlparse(url)
-            # Apenas links internos ao domínio
-            if base_domain not in parsed.netloc and not url.startswith("/"):
-                continue
-            # Ignora documentos (PDF, CSV, XLS)
-            if any(url.lower().endswith(ext) for ext in (".pdf", ".csv", ".xls", ".xlsx")):
+        for row in link_rows:
+            target_url: str = row["target_url"]
+            target_id: int | None = row.get("target_page_id")
+            link_title: str | None = row.get("link_title")
+
+            # Ignora documentos (PDF, CSV, XLS) — são tratados em outra fase
+            if any(target_url.lower().endswith(ext) for ext in (".pdf", ".csv", ".xls", ".xlsx")):
                 continue
 
-            target_id = await self._resolve_page_id_by_url(url)
-            if target_id is None and not url.startswith("http"):
+            # Só processa links internos ao domínio
+            parsed = urlparse(target_url)
+            if base_domain not in parsed.netloc and not target_url.startswith("/"):
+                continue
+
+            # Pula auto-referências
+            if target_id == source_id:
                 continue
 
             try:
                 rel = DocumentRelation(
                     source_page_id=source_id,
                     target_page_id=target_id,
-                    target_url=url if target_id is None else None,
+                    target_url=target_url if target_id is None else None,
                     relation_type="referencia",
                     strategy="link",
-                    context=f"Link encontrado em main_content: {url[:120]}",
+                    context=f"Link: {link_title or target_url[:120]}",
                     confidence=1.0,
                 )
                 relations.append(rel)
@@ -249,3 +255,11 @@ class RelationExtractor:
     @abstractmethod
     async def _resolve_page_id_by_url(self, url: str) -> int | None:
         """Resolve URL para page_id via lookup no banco."""
+
+    @abstractmethod
+    async def _fetch_page_links(self, source_url: str) -> list[dict]:
+        """Retorna os links extraídos por crawler para uma página.
+
+        Cada dict: {target_url, target_page_id (int | None), link_title}.
+        target_page_id é NULL se o destino não existe em pages.
+        """

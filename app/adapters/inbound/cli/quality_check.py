@@ -12,12 +12,11 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
-import os
 import sys
 
-import asyncpg
-
 from app.adapters.outbound.postgres.chunk_quality_service import PostgresChunkQualityService
+from app.adapters.outbound.postgres.connection import DatabasePool, get_pool
+from app.config.settings import get_settings
 from app.domain.value_objects.chunk_quality import QualityReport
 
 logging.basicConfig(
@@ -58,8 +57,10 @@ def _print_report(report: QualityReport) -> None:
 
 
 async def _run(args: argparse.Namespace) -> None:
-    dsn = os.environ.get("DATABASE_URL", "postgresql://cristal:cristal@localhost:5432/cristal")
-    pool = await asyncpg.create_pool(dsn, min_size=2, max_size=5)
+    settings = get_settings()
+    db = DatabasePool(settings)
+    await db.__aenter__()
+    pool = get_pool(db)
     service = PostgresChunkQualityService(pool)
     tables = _tables_for_target(args.target)
 
@@ -93,7 +94,7 @@ async def _run(args: argparse.Namespace) -> None:
             print(f"\n  Duplicatas quarentenadas: {combined_dup.chunks_deduplicated:,}")
 
     finally:
-        await pool.close()
+        await db.__aexit__(None, None, None)
 
 
 def main() -> None:

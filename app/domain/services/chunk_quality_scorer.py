@@ -45,7 +45,8 @@ _WEIGHTS: dict[str, float] = {
 _RE_WORD    = re.compile(r"\b[a-záéíóúãõâêîôûàç]{3,}\b", re.IGNORECASE)
 _RE_JUNK    = re.compile(r"[^\w\s.,;:()\-/]", re.UNICODE)          # caracteres "lixo"
 _RE_SENT_END = re.compile(r"[.!?]\s")
-_RE_REPEATED_LINE = re.compile(r"(.{20,})\n\1", re.MULTILINE)      # linhas duplicadas
+# Nota: regex antigo `(.{20,})\n\1` causava catastrophic backtracking (ReDoS)
+# em textos longos com conteúdo quase-repetitivo. Substituído por _has_repeated_line (O(n)).
 
 # tabela: ≥2 células pipe-separated
 _RE_TABLE_LINE = re.compile(r"\|[^|]+\|")
@@ -70,9 +71,10 @@ class ChunkQualityScorer:
     ) -> QualityReport:
         """Pontua todos os chunks sem quality_score na tabela indicada."""
         report = QualityReport()
-        offset = 0
+        # Nota: offset sempre=0 porque o WHERE (quality_score IS NULL) já exclui
+        # os chunks já processados. Incrementar offset puláva chunks ainda pendentes.
         while True:
-            rows = await self._repo.fetch_unscored_chunks(table, limit=batch_size, offset=offset)
+            rows = await self._repo.fetch_unscored_chunks(table, limit=batch_size, offset=0)
             if not rows:
                 break
             results = [self._score_chunk(r["id"], table, r["chunk_text"]) for r in rows]
@@ -81,8 +83,7 @@ class ChunkQualityScorer:
             report.chunks_quarantined += sum(1 for r in results if r.quarantined)
             self._accumulate_flags(report, results)
             self._accumulate_distribution(report, results)
-            logger.info("Pontuados %d chunks de %s (offset=%d)", len(results), table, offset)
-            offset += batch_size
+            logger.info("Pontuados %d chunks de %s", len(results), table)
         return report
 
     async def deduplicate(self, table: str, batch_size: int = 5000) -> QualityReport:
@@ -156,7 +157,7 @@ class ChunkQualityScorer:
             flags.append("incoherent")
 
         # 5. Ausência de duplicação interna
-        if _RE_REPEATED_LINE.search(text):
+        if _has_repeated_line(text):
             scores["ausencia_dup_interna"] = 0.3
             flags.append("internal_dup")
         else:
@@ -218,3 +219,16 @@ class ChunkQualityScorer:
 def _text_hash(text: str) -> str:
     normalized = " ".join(text.lower().split())
     return hashlib.sha256(normalized.encode()).hexdigest()
+
+
+def _has_repeated_line(text: str) -> bool:
+    """Detecta linhas consecutivas idênticas com 20+ caracteres. O(n).
+
+    Substitui o regex `(.{20,})\\n\\1` que causava catastrophic backtracking
+    em textos longos com conteúdo quase-repetitivo.
+    """
+    lines = text.splitlines()
+    for a, b in zip(lines, lines[1:]):
+        if len(a) >= 20 and a == b:
+            return True
+    return False
