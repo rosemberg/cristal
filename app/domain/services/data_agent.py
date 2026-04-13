@@ -25,6 +25,7 @@ from app.domain.value_objects.search_result import ChunkMatch, PageMatch
 # (menor que PromptBuilder para controlar tamanho do contexto de function calling)
 _MAX_PAGE_CHARS_DATA_AGENT = 8_000
 
+
 logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT_TEMPLATE = """\
@@ -215,20 +216,24 @@ class DataAgent:
                 # LLM finalizou — extrai data_summary do texto
                 raw_text = response.text or ""
                 data_summary = self._extract_summary(raw_text)
-                selected_table_indices = self._extract_selected_indices(
-                    data_summary, selected_table_indices, len(tables)
-                )
+                # Só aceita índices do data_summary se o DataAgent fez ao menos
+                # um tool call. Sem tool calls → pergunta não é sobre dados tabulares.
+                if tool_calls_log:
+                    selected_table_indices = self._extract_selected_indices(
+                        data_summary, selected_table_indices, len(tables)
+                    )
+                else:
+                    selected_table_indices = []
                 break
 
-        # Monta selected_tables a partir dos índices consultados
-        if not selected_table_indices and tables:
-            selected_table_indices = list(range(min(len(tables), 3)))
-
+        # Monta selected_tables apenas com os índices que o DataAgent consultou
+        # via tool calls. Perguntas informacionais (sem tool calls) não exibem tabelas.
         selected_tables = [
             tables[i] for i in selected_table_indices if i < len(tables)
         ]
 
-        # Chunks relevantes: top-3 com maior score (preserva ChunkMatch para citações)
+        # Chunks relevantes: top-3 por score — o ResponseAssembler filtra por score
+        # antes de exibir como fonte, preservando o contexto completo para o WriterAgent.
         relevant_chunks = sorted(chunks, key=lambda c: c.score, reverse=True)[:3]
 
         return AnalysisResult(
@@ -276,3 +281,4 @@ class DataAgent:
         except (json.JSONDecodeError, ValueError, TypeError):
             pass
         return already_selected
+

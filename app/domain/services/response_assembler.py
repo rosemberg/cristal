@@ -22,6 +22,14 @@ from app.domain.value_objects.chat_message import ChatMessage, Citation, MetricI
 
 _TOTAL_LABELS = {"TOTAL", "SUBTOTAL", "GRAND TOTAL", "TOTAIS", "TOTAL GERAL"}
 
+# Threshold de score para exibir um chunk como fonte.
+# Perguntas informacionais (sem computed_metrics): rigoroso — chunks de contratos/passagens
+# retornados por similaridade superficial não devem virar "FONTES" para "o que é o portal?".
+_CITATION_MIN_SCORE_INFO: float = 0.35
+# Perguntas de dados (com computed_metrics): relaxado — corpus é específico e scores menores
+# ainda representam conteúdo relevante que justifica aparecer como fonte.
+_CITATION_MIN_SCORE_DATA: float = 0.20
+
 _DEFAULT_SUGGESTIONS = [
     "Quais contratos estão vigentes?",
     "Qual o valor total dos contratos?",
@@ -208,25 +216,42 @@ class ResponseAssembler:
         return metrics
 
     def _build_citations(self, analysis: AnalysisResult) -> list[Citation]:
-        """Constrói Citations a partir das tabelas selecionadas e chunks."""
+        """Constrói Citations a partir das tabelas selecionadas e chunks.
+
+        Usa threshold adaptativo de score:
+        - Pergunta de dados (computed_metrics não vazio): threshold relaxado (0.20).
+        - Pergunta informacional (sem métricas): threshold rigoroso (0.35) — evita
+          que contratos/passagens apareçam como "FONTES" para "o que é o portal?".
+
+        Tabelas só são citadas se houve ao menos uma métrica computada (tool call
+        bem-sucedido), garantindo que tabelas incidentais não virem fontes.
+        """
         seen_urls: set[str] = set()
         citations: list[Citation] = []
 
-        # Citations das tabelas selecionadas
-        for table in analysis.selected_tables:
-            if table.document_url not in seen_urls:
-                seen_urls.add(table.document_url)
+        is_data_query = bool(analysis.computed_metrics)
+        min_score = _CITATION_MIN_SCORE_DATA if is_data_query else _CITATION_MIN_SCORE_INFO
+
+        # Citations das tabelas — apenas se houve análise efetiva (tool calls)
+        if is_data_query:
+            for table in analysis.selected_tables:
+                url = table.document_url or ""
+                if url in seen_urls:
+                    continue
+                seen_urls.add(url)
                 citations.append(
                     Citation(
-                        document_title=table.caption or table.document_url,
-                        document_url=table.document_url,
+                        document_title=table.caption or url,
+                        document_url=url,
                         snippet=f"Tabela com {len(table.rows)} linhas",
                         page_number=table.page_number,
                     )
                 )
 
-        # Citations dos chunks relevantes
+        # Citations dos chunks relevantes — filtro de score adaptativo
         for cm in analysis.relevant_chunks:
+            if cm.score < min_score:
+                continue
             url = cm.document_url or cm.chunk.document_url or ""
             if url and url in seen_urls:
                 continue
